@@ -468,9 +468,9 @@ export const A = {
     if (p.style !== 'lantern' && i >= 2) glyph(g, '!', 19, Math.max(0, 1 + hop), C.bang)
   }),
 
-  suitUp: once('puts on the ring: Green Lantern!', 20, (g, i) => {
+  suitUp: once('puts on the ring', 20, (g, i, _props, p) => {
     const O = THEMES.classic
-    const G = THEMES.lantern
+    const G = p.style === 'lantern' ? p : THEMES.lantern     // the corps being put on
     let greenFrom = 99
     if (i >= 12 && i <= 16) greenFrom = Math.round(18 - (i - 12) * 2.4)
     if (i >= 17) greenFrom = -1
@@ -490,7 +490,7 @@ export const A = {
     if (i < 12) {
       armTo(g, RING_HAND, O.body)
       ringAt(g, 39, RING_HAND[1] - 1, i === 8)
-      if (i === 8) { drawEmblemGlow(g, 34, 2, C.energy); twinkle(g, 41, RING_HAND[1] - 3, true) }
+      if (i === 8) { drawEmblemGlow(g, 34, 2, C.energy, G.emblem); twinkle(g, 41, RING_HAND[1] - 3, true) }
       if (i >= 9) { halo(g, 41, RING_HAND[1], (i - 8) * 4, C.energy); halo(g, 41, RING_HAND[1], (i - 8) * 4 - 3, C.halo) }
       return
     }
@@ -512,9 +512,9 @@ export const A = {
     px(g, 40, 12, C.energy)
   }),
 
-  powerDown: once('takes the ring off', 11, (g, i) => {
+  powerDown: once('takes the ring off', 11, (g, i, _props, p) => {
     const O = THEMES.classic
-    const G = THEMES.lantern
+    const G = p.from ?? THEMES.lantern                        // the corps being left
     let orangeTo = -1
     if (i >= 3 && i <= 7) orangeTo = Math.round(9 + (i - 3) * 2.4)
     if (i >= 8) orangeTo = 99

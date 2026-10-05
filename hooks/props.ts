@@ -41,7 +41,7 @@ export function drawClawd(g: Grid, p: Paint, pose: ClawdPose = {}): void {
     if (eyes === 'down') { px(g, x, y, p.body); px(g, x + 1, y, p.body) }
   }
   if (p.style === 'lantern') {
-    drawBadge(g, ox, dy)
+    drawBadge(g, ox, dy, p.badge)
     px(g, CX + ox + 34, CY + 4 + dy, C.energyHi)
     px(g, CX + ox + 34, CY + 5 + dy, C.energy)
   }
@@ -242,8 +242,8 @@ export const EMBLEM = [
   '.##.......##.', '..##.....##..', '...#######...', '#############',
 ]
 
-export function drawBadge(g: Grid, ox = 0, dy = 0): void {
-  BADGE.forEach((row, j) => {
+export function drawBadge(g: Grid, ox = 0, dy = 0, shape: readonly string[] = BADGE): void {
+  shape.forEach((row, j) => {
     for (let i = 0; i < row.length; i++) {
       if (row[i] === 'W') px(g, 16 + ox + i, 10 + dy + j, C.badgeW)
       if (row[i] === 'D') px(g, 16 + ox + i, 10 + dy + j, C.badgeD)
@@ -252,8 +252,8 @@ export function drawBadge(g: Grid, ox = 0, dy = 0): void {
 }
 
 // The emblem as a glow behind whatever is already drawn.
-export function drawEmblemGlow(g: Grid, x: number, y: number, c: string): void {
-  EMBLEM.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] === '#') under(g, x + i, y + j, c) })
+export function drawEmblemGlow(g: Grid, x: number, y: number, c: string, shape: readonly string[] = EMBLEM): void {
+  shape.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] === '#') under(g, x + i, y + j, c) })
 }
 
 // Every pixel of the hammer sprite at a pivot and angle, as points.

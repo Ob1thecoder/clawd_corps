@@ -1,9 +1,8 @@
 import { A, type Anim, IMPACT_FRAMES, LOOP, type LoopState, PLAN_PEEK, type Props } from './anims'
 import { CX, CY, drawHeart, drawRingIcon, drawSpeedLines, drawSweat } from './props'
 import { glyph } from './pixels'
-import { C } from './themes'
+import { C, type Paint, THEMES } from './themes'
 import { type Grid, grid } from './pixels'
-import type { Paint } from './themes'
 
 export type StoryEvent =
   | 'start' | 'prompt' | 'planmode' | 'planshown' | 'approve' | 'reject' | 'edit'
@@ -168,7 +167,30 @@ export function render(m: Machine, p: Paint): Grid {
     drawSpeedLines(g, m.boost)
   }
   if (p.style === 'classic' && m.state !== 'offstage') drawRingIcon(g)
+  recolor(g, p)
   return g
+}
+
+// The art is drawn in Green's ring colours; other corps swap them for their own, and a dark body gets a rim.
+function recolor(g: Grid, p: Paint): void {
+  const lantern = p.style === 'lantern' ? p : p.from
+  const ring = lantern?.ring
+  if (!ring || ring === THEMES.lantern.ring) return
+  const map = new Map<string, string>([
+    [C.energy, ring.energy], [C.energyHi, ring.energyHi], [C.core, ring.core], [C.coreHi, ring.coreHi],
+    [C.halo, ring.halo], [C.haloHi, ring.haloHi], [C.gSpark, ring.gSpark], [C.badgeW, ring.badgeBg], [C.badgeD, ring.badgeFg],
+  ])
+  for (const row of g) for (let x = 0; x < row.length; x++) { const c = row[x]; if (c) row[x] = map.get(c) ?? c }
+  if (!ring.rim || p.style !== 'lantern') return
+  const body = p.body
+  const at = (x: number, y: number) => g[y]?.[x]
+  const rim: [number, number][] = []
+  for (let y = 0; y < g.length; y++) {
+    for (let x = 0; x < (g[y]?.length ?? 0); x++) {
+      if (at(x, y) === null && (at(x + 1, y) === body || at(x - 1, y) === body || at(x, y + 1) === body || at(x, y - 1) === body)) rim.push([x, y])
+    }
+  }
+  for (const [x, y] of rim) { const row = g[y]; if (row) row[x] = ring.rim }
 }
 
 // Fills part of each open eye notch so the pupils point toward the pointer.
