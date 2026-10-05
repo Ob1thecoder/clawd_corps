@@ -1,11 +1,14 @@
-import { A, type Anim, LOOP, type LoopState, type Props } from './anims'
+import { A, type Anim, IMPACT_FRAMES, LOOP, type LoopState, PLAN_PEEK, type Props } from './anims'
+import { CX, CY, drawHeart, drawRingIcon, drawSpeedLines, drawSweat } from './props'
+import { glyph } from './pixels'
+import { C } from './themes'
 import { type Grid, grid } from './pixels'
 import type { Paint } from './themes'
 
 export type StoryEvent =
   | 'start' | 'prompt' | 'planmode' | 'planshown' | 'approve' | 'reject' | 'edit'
   | 'error' | 'permask' | 'permok' | 'turnend' | 'esc' | 'idle2m' | 'typing'
-  | 'suitup' | 'powerdown'
+  | 'suitup' | 'powerdown' | 'poke' | 'whip'
 
 export type Machine = {
   state: LoopState
@@ -15,13 +18,20 @@ export type Machine = {
   props: Props
   tprops: Props
   inTransition: boolean
+  boost: number                 // frames left at double speed after the whip
+  flinch: number                // frames left of the poke-while-busy "!"
+  look: Look | null             // where the pointer is, for the eyes to follow
 }
+
+export type Look = 'left' | 'right' | 'up' | 'down'
+export const BOOST = 32
+const FLINCH = 6
 
 type Plan = { seq: Anim[]; to: LoopState; set: Partial<Props> }
 
 export function createMachine(): Machine {
   const props: Props = { hat: false, clip: false, prev: null }
-  return { state: 'offstage', seq: [LOOP.offstage], si: 0, f: 0, props, tprops: { ...props }, inTransition: false }
+  return { state: 'offstage', seq: [LOOP.offstage], si: 0, f: 0, props, tprops: { ...props }, inTransition: false, boost: 0, flinch: 0, look: null }
 }
 
 const WORKING: LoopState[] = ['thinking', 'planning', 'showplan', 'building', 'waiting']
@@ -75,11 +85,20 @@ function plan(m: Machine, ev: StoryEvent): Plan | null {
       return s === 'offstage' ? null : { seq: [A.suitUp], to: s, set: {} }
     case 'powerdown':
       return s === 'offstage' ? null : { seq: [A.powerDown], to: s, set: {} }
+    case 'poke':
+      return s === 'idle' || s === 'thinking' ? { seq: [A.poke], to: s, set: {} } : null
+    case 'whip':
+      return s === 'building' ? { seq: [A.whipHit], to: s, set: {} } : null
   }
 }
 
 // Interruptible: a new event replaces whatever transition is playing, drawn from the props held now.
 export function fire(m: Machine, ev: StoryEvent, instant = false): boolean {
+  // A poke while Clawd is busy doesn't interrupt the work: just a "!" and a heart over it.
+  if (ev === 'poke' && (m.state === 'planning' || m.state === 'showplan' || m.state === 'waiting')) {
+    m.flinch = FLINCH
+    return true
+  }
   const p = plan(m, ev)
   if (!p) return false
   m.tprops = { ...m.props }
@@ -89,6 +108,26 @@ export function fire(m: Machine, ev: StoryEvent, instant = false): boolean {
   m.si = 0
   m.f = 0
   m.inTransition = !instant
+  if (ev === 'whip') m.boost = BOOST
+  return true
+}
+
+function inLoop(m: Machine, state: LoopState): boolean {
+  return m.state === state && current(m).loop
+}
+
+// Click on the nail: the hammering jumps straight to its next blow.
+export function whack(m: Machine): boolean {
+  if (!inLoop(m, 'building')) return false
+  const at = m.f % A.building.n
+  m.f = IMPACT_FRAMES.find(f => f > at) ?? IMPACT_FRAMES[0] ?? 0
+  return true
+}
+
+// Click on the clipboard: show the finished plan.
+export function peek(m: Machine): boolean {
+  if (!inLoop(m, 'planning')) return false
+  m.f = PLAN_PEEK
   return true
 }
 
@@ -97,6 +136,15 @@ export function current(m: Machine): Anim {
 }
 
 export function tick(m: Machine): void {
+  step(m)
+  if (m.boost > 0) {
+    step(m)
+    m.boost--
+  }
+  if (m.flinch > 0) m.flinch--
+}
+
+function step(m: Machine): void {
   const a = current(m)
   m.f++
   if (!a.loop && m.f >= a.n) {
@@ -110,5 +158,28 @@ export function render(m: Machine, p: Paint): Grid {
   const g = grid()
   const a = current(m)
   a.draw(g, m.f, a.loop ? m.props : m.tprops, p)
+  if (m.look && inLoop(m, 'idle')) lookAt(g, m.look, p.body)
+  if (m.flinch > 0) {
+    glyph(g, '!', 38, 0, C.bang)
+    drawHeart(g, 44, Math.max(0, 3 - (FLINCH - m.flinch)))
+  }
+  if (m.boost > 0 && m.state === 'building') {
+    drawSweat(g, m.boost)
+    drawSpeedLines(g, m.boost)
+  }
+  if (p.style === 'classic' && m.state !== 'offstage') drawRingIcon(g)
   return g
+}
+
+// Fills part of each open eye notch so the pupils point toward the pointer.
+function lookAt(g: Grid, look: Look, body: string): void {
+  for (const ex of [CX + 10, CX + 24]) {
+    const ey = CY + 2
+    if (g[ey]?.[ex] !== null || g[ey]?.[ex + 1] !== null) continue
+    const fill: [number, number][] = look === 'right' ? [[ex, ey], [ex, ey + 1]]
+      : look === 'left' ? [[ex + 1, ey], [ex + 1, ey + 1]]
+      : look === 'up' ? [[ex, ey + 1], [ex + 1, ey + 1]]
+      : [[ex, ey], [ex + 1, ey]]
+    for (const [x, y] of fill) { const row = g[y]; if (row) row[x] = body }
+  }
 }

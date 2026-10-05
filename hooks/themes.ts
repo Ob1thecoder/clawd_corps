@@ -55,4 +55,5 @@ export const C = {
   // ring energy: deliberately paler than Clawd's lantern green so ring, beam and construct stand apart from the body
   energy: '#c4ffd9', energyHi: '#f2fff6', core: '#0d3a20', coreHi: '#1f6e40', halo: '#145c34', haloHi: '#1f8048',
   beam: '#ffffff', gSpark: '#e8fff0', badgeW: '#eafbe9', badgeD: '#0b3d1c',
+  heart: '#ff6b9a', sweatHi: '#d6f0ff', leather: '#8b5a2b', leatherTip: '#c08a52', whipGrip: '#3a2a20', speed: '#3a4252',
 } as const

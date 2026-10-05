@@ -338,3 +338,63 @@ export function sparksAt(g: Grid, nx: number, hy: number, big: boolean, c1: stri
   const far: [number, number, string][] = [[-7, -1, c1], [7, -1, c1], [-7, -4, c1], [7, -4, c1], [-5, -5, c1], [5, -5, c1]]
   for (const [dx, dy, c] of big ? near : far) px(g, nx + dx, hy + dy, c)
 }
+
+// ---------------- interactions ----------------
+
+const HEART = ['##.##', '#####', '.###.', '..#..']
+export function drawHeart(g: Grid, x: number, y: number): void {
+  HEART.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] === '#') px(g, x + i, y + j, C.heart) })
+}
+
+const RING_ICON = ['.hh.', 'r..r', '.rr.']
+export function drawRingIcon(g: Grid): void {
+  RING_ICON.forEach((row, j) => {
+    for (let i = 0; i < row.length; i++) {
+      if (row[i] === 'h') px(g, 53 + i, j, C.energyHi)
+      if (row[i] === 'r') px(g, 53 + i, j, C.energy)
+    }
+  })
+}
+
+// The whip: a leather lash from the band's left edge that lands on Clawd's side (frames 0-4).
+export const STRIKE: Point = [4, 13]
+export function drawWhip(g: Grid, i: number): void {
+  const pts: Point[] = i === 0 ? [[1, 5], [3, 3], [2, 1], [5, 0]]
+    : i === 1 ? [[1, 5], [4, 2], [9, 0], [13, 1], [15, 4]]
+    : i <= 3 ? [[1, 5], [2, 7], [3, 10], STRIKE]
+    : [[1, 5], [4, 5], [7, 6]]
+  for (let j = 1; j < pts.length; j++) {
+    const a = pts[j - 1]!
+    const b = pts[j]!
+    line(g, a[0], a[1], b[0], b[1], j === pts.length - 1 ? C.leatherTip : C.leather)
+  }
+  rect(g, 0, 4, 2, 3, C.whipGrip)
+  if (i === 2 || i === 3) {
+    const r = i
+    ;([[0, -1], [1, 0], [0, 1], [-1, 0], [1, -1], [1, 1], [-1, 1], [-1, -1]] as const).forEach(([dx, dy], k) => {
+      px(g, STRIKE[0] + dx * r, STRIKE[1] + dy * r, k % 2 ? C.spark : C.sparkHi)
+    })
+  }
+}
+
+// Sweating buckets: six drops spraying off both sides of the head, drips down the sides, beads on the forehead.
+export function drawSweat(g: Grid, t: number, dy = 0): void {
+  for (let d = 0; d < 6; d++) {
+    const a = (t * 0.35 + d / 6) % 1
+    const left = d % 2 === 0
+    const x = (left ? 9 : 31) + (left ? -1 : 1) * Math.round(a * 7)
+    const y = 9 + dy - Math.round(4 * a - 6 * a * a)
+    under(g, x, y, a < 0.3 ? C.sweatHi : C.sweat)
+  }
+  for (let k = 0; k < 3; k++) {
+    const y = 10 + dy + ((t + k * 3) % 8)
+    under(g, 6, y, C.sweat)
+    under(g, 33, y, C.sweat)
+  }
+  px(g, 14, 9 + dy, C.sweatHi)
+  px(g, 25, 9 + dy, C.sweatHi)
+}
+
+export function drawSpeedLines(g: Grid, t: number): void {
+  ;[12, 14, 16].forEach((y, j) => { for (let x = 0; x < 2 + ((j + t) % 3); x++) under(g, x, y, C.speed) })
+}

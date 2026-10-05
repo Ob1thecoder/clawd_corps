@@ -3,7 +3,7 @@ import {
   type Eyes, FLOAT, type Feet, HAND, LNX, NX, type Point, STROKES, drawArm, drawBeam, drawClawd, drawClipboard,
   drawConstruct, drawEmblemGlow, drawHammer, drawHat, drawNail, drawPencil, drawPlank, drawRingFist, drawSign, floor,
   halo, hammerPixels, impactPivot, lanternImpactPivot, nailHeadY, pencilBehindEar, shoulder, sparks, sparksAt,
-  thumbsUp, under,
+  thumbsUp, under, drawHeart, drawWhip,
 } from './props'
 import { C, type Paint, THEMES } from './themes'
 
@@ -33,6 +33,8 @@ BUILD.push(
   { pose: 'rest', h: 0, star: 1 }, { pose: 'rest', h: 0, star: 2 }, { pose: 'raised', h: 3 },
 )
 export const BUILD_FRAMES = BUILD.length
+// Where in the hammering loop each blow lands, for the click-to-whack shortcut.
+export const IMPACT_FRAMES = BUILD.flatMap((fr, i) => (fr.pose === 'impact' ? [i] : []))
 
 const LXO = LNX - NX
 const DEG: Record<Pose, number> = { windup: -28, raised: -10, swing: 45, impact: 90, hold: 90, lift: 60, rest: -10 }
@@ -153,6 +155,8 @@ const RING_HAND: Point = [40, 8]
 const PER = 2
 export const PLAN_DRAW = Math.ceil(STROKES.length / PER)
 const PLAN_N = 4 + PLAN_DRAW + 6 + 2
+// The first frame with the whole plan drawn, for the click-to-peek shortcut.
+export const PLAN_PEEK = 4 + PLAN_DRAW
 
 export const A = {
   offstage: loop('(off stage)', 1, () => {}),
@@ -445,6 +449,22 @@ export const A = {
     drawClawd(g, p, { dy, eyes: i < 6 ? 'open' : 'closed', feet: i < 4 ? 'wide' : 'stand' })
     if (props.hat && !lantern && i < 6) drawHammer(g, [37, 10 + i * 3], 30 + i * 40)
     if (i < 6) glyph(g, '!', 38, 0, C.bang)
+  }),
+
+  poke: once('poked! a happy hop', 8, (g, i, _props, p) => {
+    const dy = [-2, -3, -2, 0, 0, 0, 0, 0][i] ?? 0
+    drawClawd(g, p, { dy, eyes: i < 5 ? 'closed' : 'open', feet: i < 3 ? 'wide' : 'stand' })
+    drawHeart(g, 30, Math.max(0, 5 - i))
+    if (i > 1) drawHeart(g, 36, Math.max(0, 7 - i))
+    if (i < 4) glyph(g, '!', 19, Math.max(0, dy - 2), C.bang)
+  }),
+
+  whipHit: once('the whip lands: back to work, faster', 5, (g, i, _props, p) => {
+    // Orange Clawd hops on the hit; a Green Lantern doesn't flinch.
+    const hop = p.style === 'lantern' ? 0 : i === 3 ? -2 : i === 4 ? -1 : 0
+    drawBuildFrame(g, p, { pose: 'raised', h: 3, hop }, {}, i)
+    drawWhip(g, i)
+    if (p.style !== 'lantern' && i >= 2) glyph(g, '!', 19, Math.max(0, 1 + hop), C.bang)
   }),
 
   suitUp: once('puts on the ring: Green Lantern!', 20, (g, i) => {
