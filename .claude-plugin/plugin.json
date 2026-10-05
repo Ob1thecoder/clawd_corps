@@ -1,6 +1,12 @@
 {
   "name": "clawd",
   "version": "0.1.0",
-  "description": "Animated Clawd above the prompt that acts out what Claude is doing",
-  "types": "./types/index.d.ts"
+  "description": "Animated Clawd above the prompt that acts out what Claude is doing, in a Lantern Corps colour per session",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "Ob1thecoder",
+    "url": "https://github.com/Ob1thecoder"
+  },
+  "repository": "https://github.com/Ob1thecoder/clawd_corps",
+  "license": "MIT"
 }
