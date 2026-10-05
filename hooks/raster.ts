@@ -53,12 +53,15 @@ function unbase64(s: string): Uint8Array {
   return out
 }
 
+// Encodes a pixel grid of any size (two pixel rows per cell row); the full scene is COLUMNS x ROWS cells.
 export function encodeCells(g: Grid): string {
-  const view = new DataView(new ArrayBuffer(COLUMNS * ROWS * 12))
-  for (let r = 0; r < ROWS; r++) {
-    for (let x = 0; x < COLUMNS; x++) {
+  const columns = g[0]?.length ?? COLUMNS
+  const rows = Math.ceil(g.length / 2)
+  const view = new DataView(new ArrayBuffer(columns * rows * 12))
+  for (let r = 0; r < rows; r++) {
+    for (let x = 0; x < columns; x++) {
       const [cp, fg, bg] = cellOf(g[2 * r]?.[x] ?? null, g[2 * r + 1]?.[x] ?? null)
-      const at = (r * COLUMNS + x) * 12
+      const at = (r * columns + x) * 12
       view.setUint32(at, cp, true)
       view.setUint32(at + 4, fg, true)
       view.setUint32(at + 8, bg, true)
