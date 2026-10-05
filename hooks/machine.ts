@@ -5,6 +5,7 @@ import type { Paint } from './themes'
 export type StoryEvent =
   | 'start' | 'prompt' | 'planmode' | 'planshown' | 'approve' | 'reject' | 'edit'
   | 'error' | 'permask' | 'permok' | 'turnend' | 'esc' | 'idle2m' | 'typing'
+  | 'suitup' | 'powerdown'
 
 export type Machine = {
   state: LoopState
@@ -69,6 +70,11 @@ function plan(m: Machine, ev: StoryEvent): Plan | null {
       return s === 'idle' ? { seq: [A.dozeIn], to: 'doze', set: {} } : null
     case 'typing':
       return s === 'doze' ? { seq: [A.wake], to: 'idle', set: {} } : null
+    // A transformation plays over whatever Clawd is doing, then returns to it with its props.
+    case 'suitup':
+      return s === 'offstage' ? null : { seq: [A.suitUp], to: s, set: {} }
+    case 'powerdown':
+      return s === 'offstage' ? null : { seq: [A.powerDown], to: s, set: {} }
   }
 }
 

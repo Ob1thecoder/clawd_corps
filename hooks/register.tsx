@@ -12,11 +12,11 @@ const LABEL_MIN_COLUMNS = COLUMNS + 14
 const BUILD_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit', 'Bash'])
 
 const enabledAtom = atom({ plugin: 'clawd', key: 'enabled' } as const, true)
-const themeAtom = atom({ plugin: 'clawd', key: 'theme' } as const, 'lantern' as ClawdThemeName)
+const themeAtom = atom({ plugin: 'clawd', key: 'theme' } as const, 'classic' as ClawdThemeName)
 
 const m = createMachine()
 let bandId: string | null = null
-let theme: ClawdThemeName = 'lantern'
+let theme: ClawdThemeName = 'classic'
 let enabled = true
 let turn = 0
 let askedId: string | null = null
@@ -153,8 +153,10 @@ export const register: Register = on => {
   on('command.run', { command: 'clawd' }, async ($, e) => {
     const arg = e.args.trim().toLowerCase()
     if (isThemeName(arg)) {
+      const before = await read($, themeAtom)
       await update($, themeAtom, () => arg)
       await $.store.set('theme', arg)
+      if (arg !== before && (await read($, enabledAtom))) send($, arg === 'lantern' ? 'suitup' : 'powerdown')
       return { text: `Clawd theme: ${THEMES[arg].title}.` }
     }
     if (arg !== '' && arg !== 'on' && arg !== 'off') return { text: 'Usage: /clawd [on|off|lantern|classic]' }

@@ -2,6 +2,8 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 
+import { decodeCells } from '../hooks/raster'
+
 const BAND = (bodyColumns = 80, maxRows = 12) =>
   ({
     component: 'AbovePrompt',
@@ -108,5 +110,29 @@ test('frames are pushed to the band on the timer', async ($, on) => {
   const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
   await clock?.advance(500)
   expect(blits).toBeGreaterThan(0)
+  await ui.unmount()
+})
+
+async function bodyColors($: Engine) {
+  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  const cells = String((await ui.find({ key: 'clawd' }))?.props.cells ?? '')
+  await ui.unmount()
+  return new Set(decodeCells(cells).flatMap(([, fg, bg]) => [fg, bg]))
+}
+
+test('Clawd is orange by default', async ($, on) => {
+  await start($, on)
+  // Clawd is still hopping in off-screen on the first frame, so read the theme from the floor every frame draws.
+  const colors = await bodyColors($)
+  expect(colors.has(0x3a2c25)).toBe(true)
+  expect(colors.has(0x123a22)).toBe(false)
+})
+
+test('/clawd lantern while hammering transforms Clawd and keeps it hammering', async ($, on) => {
+  await start($, on)
+  await $.tool.call({ tool: 'Edit', file_path: '/tmp/a.txt', old_string: 'a', new_string: 'b' })
+  expect((await clawd($, 'lantern')).text).toMatch(/Green Lantern/)
+  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  expect((await ui.find({ key: 'clawd-state' }))?.text).toMatch(/BUILDING/)
   await ui.unmount()
 })

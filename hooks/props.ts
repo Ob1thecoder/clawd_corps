@@ -40,6 +40,11 @@ export function drawClawd(g: Grid, p: Paint, pose: ClawdPose = {}): void {
     if (eyes === 'up') { px(g, x, y + 1, p.body); px(g, x + 1, y + 1, p.body) }
     if (eyes === 'down') { px(g, x, y, p.body); px(g, x + 1, y, p.body) }
   }
+  if (p.style === 'lantern') {
+    drawBadge(g, ox, dy)
+    px(g, CX + ox + 34, CY + 4 + dy, C.energyHi)
+    px(g, CX + ox + 34, CY + 5 + dy, C.energy)
+  }
 }
 
 export function shoulder(ox = 0, dy = 0): Point {
@@ -213,4 +218,123 @@ export function thumbsUp(g: Grid, p: Paint): void {
   rect(g, 39, 6, 2, 2, p.body)
   px(g, 40, 4, p.body)
   px(g, 40, 5, p.body)
+}
+
+// ---------------- Green Lantern style ----------------
+
+// Paints only empty background, so halos and glows never cover Clawd or a prop.
+export function under(g: Grid, x: number, y: number, c: string): void {
+  const rx = Math.round(x)
+  const ry = Math.round(y)
+  if (g[ry]?.[rx] === null) px(g, rx, ry, c)
+}
+
+export function halo(g: Grid, cx: number, cy: number, r: number, c: string): void {
+  for (let a = 0; a < 48; a++) {
+    const t = (a / 48) * Math.PI * 2
+    under(g, cx + Math.cos(t) * r, cy + Math.sin(t) * r, c)
+  }
+}
+
+const BADGE = ['..WWWWW..', '.WDDDDDW.', 'WWWDDDWWW', 'WWDWWWDWW', 'WWWDDDWWW', '.WDDDDDW.', '..WWWWW..']
+export const EMBLEM = [
+  '#############', '...#######...', '..##.....##..', '.##.......##.', '.##.......##.',
+  '.##.......##.', '..##.....##..', '...#######...', '#############',
+]
+
+export function drawBadge(g: Grid, ox = 0, dy = 0): void {
+  BADGE.forEach((row, j) => {
+    for (let i = 0; i < row.length; i++) {
+      if (row[i] === 'W') px(g, 16 + ox + i, 10 + dy + j, C.badgeW)
+      if (row[i] === 'D') px(g, 16 + ox + i, 10 + dy + j, C.badgeD)
+    }
+  })
+}
+
+// The emblem as a glow behind whatever is already drawn.
+export function drawEmblemGlow(g: Grid, x: number, y: number, c: string): void {
+  EMBLEM.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] === '#') under(g, x + i, y + j, c) })
+}
+
+// Every pixel of the hammer sprite at a pivot and angle, as points.
+export function hammerPixels(pivot: Point, deg: number): Point[] {
+  const a = (deg * Math.PI) / 180
+  const co = Math.cos(a)
+  const si = Math.sin(a)
+  const out: Point[] = []
+  for (let dy = -13; dy <= 13; dy++) {
+    for (let dx = -13; dx <= 13; dx++) {
+      const ch = HAMMER[HPIV[1] + Math.round(-dx * si + dy * co)]?.[HPIV[0] + Math.round(dx * co + dy * si)]
+      if (ch && ch !== '.') out.push([pivot[0] + dx, pivot[1] + dy])
+    }
+  }
+  return out
+}
+
+// Ring light: a bright outline around a dark, shimmering core. `amount` (0..1) draws only part, for forming and fading.
+export function drawConstruct(g: Grid, pts: readonly Point[], flick = 0, amount = 1): void {
+  const set = new Set(pts.map(([x, y]) => `${x},${y}`))
+  const keep = Math.round(pts.length * amount)
+  pts.forEach(([x, y], k) => {
+    if (k >= keep) return
+    const edge = !set.has(`${x + 1},${y}`) || !set.has(`${x - 1},${y}`) || !set.has(`${x},${y + 1}`) || !set.has(`${x},${y - 1}`)
+    px(g, x, y, edge ? C.energy : (x + y + flick) % 5 === 0 ? C.coreHi : C.core)
+  })
+}
+
+// The beam: a 2-pixel core with a glow edge, and three sparks travelling from the ring to the construct.
+export function drawBeam(g: Grid, a: Point, b: Point, i: number, faint = false): void {
+  const n = Math.max(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]), 1)
+  for (let k = 0; k <= n; k++) {
+    const x = Math.round(a[0] + ((b[0] - a[0]) * k) / n)
+    const y = Math.round(a[1] + ((b[1] - a[1]) * k) / n)
+    px(g, x, y, faint ? C.haloHi : C.energy)
+    px(g, x, y + 1, faint ? C.haloHi : C.energy)
+    under(g, x, y - 1, C.haloHi)
+    under(g, x, y + 2, C.haloHi)
+  }
+  if (faint) return
+  for (let s = 0; s < 3; s++) {
+    const t = (i * 0.22 + s / 3) % 1
+    const x = Math.round(a[0] + (b[0] - a[0]) * t)
+    const y = Math.round(a[1] + (b[1] - a[1]) * t)
+    px(g, x, y, C.beam)
+    px(g, x, y + 1, C.beam)
+  }
+}
+
+export const LNX = 54
+export const FIST: Point = [38, 12]
+export const FLOAT: Point = [46, 9]
+
+export function lanternImpactPivot(h: number): Point {
+  return [LNX - 8, nailHeadY(h) - 6]
+}
+
+// The claw held straight out with the ring on it; returns where the beam leaves the ring.
+export function drawRingFist(g: Grid, p: Paint, dy: number, hit: boolean, i: number, sputter = false): Point {
+  const fx = FIST[0]
+  const fy = FIST[1] + dy
+  drawArm(g, p, shoulder(0, dy), [fx, fy])
+  rect(g, fx, fy, 2, 2, p.body)
+  const rx = fx + 2
+  const lit = !sputter || i % 2 === 0
+  px(g, rx, fy - 1, lit ? C.energyHi : C.halo)
+  px(g, rx, fy, lit ? C.energy : C.halo)
+  px(g, rx, fy + 1, lit ? C.energy : C.halo)
+  px(g, rx, fy + 2, lit ? C.energyHi : C.halo)
+  px(g, rx + 1, fy, lit ? C.energy : C.halo)
+  px(g, rx + 1, fy + 1, lit ? C.energy : C.halo)
+  px(g, rx, fy - 2, hit ? C.beam : C.energyHi)
+  if (lit) halo(g, rx, fy + 0.5, hit ? 4 : i % 2 ? 3 : 2.5, C.halo)
+  if (hit) halo(g, rx, fy + 0.5, 6, C.halo)
+  return [rx + 2, fy]
+}
+
+export function sparksAt(g: Grid, nx: number, hy: number, big: boolean, c1: string, c2: string): void {
+  const near: [number, number, string][] = [
+    [-3, 0, c2], [3, 0, c2], [-4, -1, c1], [4, -1, c1], [-5, -3, c2], [5, -3, c2], [-6, 0, c1], [6, 0, c1],
+  ]
+  const far: [number, number, string][] = [[-7, -1, c1], [7, -1, c1], [-7, -4, c1], [7, -4, c1], [-5, -5, c1], [5, -5, c1]]
+  for (const [dx, dy, c] of big ? near : far) px(g, nx + dx, hy + dy, c)
 }

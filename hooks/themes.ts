@@ -1,13 +1,15 @@
 export type ThemeName = 'lantern' | 'classic'
 export type WordState = 'idle' | 'doze' | 'thinking' | 'planning' | 'showplan' | 'building' | 'waiting'
-export type Paint = { body: string; floor: string }
+export type Style = 'classic' | 'lantern'
+export type Paint = { body: string; floor: string; style: Style }
 export type Theme = Paint & { title: string; words: Record<WordState, readonly string[]> }
 
 export const THEMES: Record<ThemeName, Theme> = {
   lantern: {
     title: 'Green Lantern',
-    body: '#3dff74',
+    body: '#2fcf62',
     floor: '#123a22',
+    style: 'lantern',
     words: {
       idle: ['In brightest day'],
       doze: ['Recharging the ring'],
@@ -22,6 +24,7 @@ export const THEMES: Record<ThemeName, Theme> = {
     title: 'Classic',
     body: '#d97757',
     floor: '#3a2c25',
+    style: 'classic',
     words: {
       idle: ['Ready'],
       doze: ['Napping'],
@@ -49,4 +52,7 @@ export const C = {
   ink: '#2b3140', check: '#1f9e4a',
   pTip: '#2b3140', pWood: '#e8c48a', pBody: '#ffcc1a', pBodyDk: '#d9a400', pFerrule: '#b8c0cc', pEraser: '#f28aa0',
   bubble: '#c9d1d9', bang: '#ffe066', red: '#ff5a5a', sweat: '#7fc8ff', zz: '#c9d1d9',
+  // ring energy: deliberately paler than Clawd's lantern green so ring, beam and construct stand apart from the body
+  energy: '#c4ffd9', energyHi: '#f2fff6', core: '#0d3a20', coreHi: '#1f6e40', halo: '#145c34', haloHi: '#1f8048',
+  beam: '#ffffff', gSpark: '#e8fff0', badgeW: '#eafbe9', badgeD: '#0b3d1c',
 } as const

@@ -103,3 +103,22 @@ test('a plan shown without EnterPlanMode (Shift+Tab plan mode) still brings out 
   expect(m.seq.slice(0, 2)).toEqual([A.clipIn, A.showIn])
   expect(m.props.clip).toBe(true)
 })
+
+test('a transformation plays over the current state and returns to it with its props', () => {
+  const m = createMachine()
+  for (const ev of ['start', 'prompt', 'edit'] as const) fire(m, ev, true)
+  expect(fire(m, 'suitup')).toBe(true)
+  expect(current(m)).toBe(A.suitUp)
+  expect(m.state).toBe('building')
+  expect(m.props.hat).toBe(true)
+  for (let i = 0; i < A.suitUp.n; i++) tick(m)
+  expect(current(m)).toBe(LOOP.building)
+  expect(fire(m, 'powerdown')).toBe(true)
+  expect(current(m)).toBe(A.powerDown)
+})
+
+test('a transformation before Clawd hops in is ignored', () => {
+  const m = createMachine()
+  expect(fire(m, 'suitup')).toBe(false)
+  expect(fire(m, 'powerdown')).toBe(false)
+})
