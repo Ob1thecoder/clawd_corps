@@ -4,6 +4,12 @@ An animated **Clawd** (the Claude Code mascot) that lives in the band above your
 
 A [Claude Code](https://claude.com/claude-code) mod, built with the function-hooks plugin API.
 
+![Eight Claude Code sessions, each Clawd in its own Lantern Corps colour: hammering with a ring construct, idling, thinking, planning on a clipboard](assets/corps.gif)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ob1thecoder/clawd_corps/main/install.sh | bash
+```
+
 ## What it does
 
 - **Acts out the session.**
@@ -32,6 +38,10 @@ A [Claude Code](https://claude.com/claude-code) mod, built with the function-hoo
   In fullscreen you can click the buttons.
 - **Fits the space it has.** Full size is 58 × 10, compact is 29 × 5, and mini is 9 × 3. When even that doesn't fit, Clawd shows in the status line instead.
 
+![A new session: Clawd hops in orange, a ring floats down, and it suits up into Blue Lantern](assets/suitup.gif)
+
+*A new session hops in orange and suits up into the first colour no other session is wearing.*
+
 ## Commands
 
 | Command | Effect |
@@ -44,14 +54,18 @@ A [Claude Code](https://claude.com/claude-code) mod, built with the function-hoo
 
 ## Install
 
-Requires Claude Code 2.1.289 or later. The function-hooks plugin API is early access and may change.
+Requires Claude Code 2.1.289 or later, plus `git`, and `python3` or `node`. The function-hooks plugin API is early access and may change.
 
 ```bash
-git clone https://github.com/Ob1thecoder/clawd_corps.git
-claude --plugin-dir ./clawd_corps
+curl -fsSL https://raw.githubusercontent.com/Ob1thecoder/clawd_corps/main/install.sh | bash
 ```
 
-To load it in every session, add the folder to `CLAUDE_CODE_PLUGIN_DIRS`, either in your environment or in the `env` block of `~/.claude/settings.json`.
+That clones the mod into `~/.claude/mods/clawd_corps` and adds the folder to `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json`. Your other settings and any other plugin folders are kept, and a backup is saved as `settings.json.bak-clawd`. Start a new Claude Code session and Clawd hops in.
+
+- **Update:** run the same command again.
+- **Uninstall:** `curl -fsSL https://raw.githubusercontent.com/Ob1thecoder/clawd_corps/main/install.sh | bash -s -- --uninstall`. It removes the setting and leaves the files.
+- **Custom location:** set `CLAWD_DIR=/path/you/want` before `bash`.
+- **Without the script:** `git clone` the repo anywhere, then add its path to `"env": { "CLAUDE_CODE_PLUGIN_DIRS": "<path>" }` in `~/.claude/settings.json`. To try it in a single session, use `claude --plugin-dir <path>`.
 
 ## Develop
 
