@@ -2,13 +2,13 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { ClawdThemeName } from '../types'
-import { type Action, actionFor, cellToPixel, lookFrom, regionAt } from './hits'
+import { type Action, actionFor, cellToPixel, regionAt } from './hits'
 import { type StoryEvent, createMachine, fire, peek, render, tick, whack } from './machine'
 import { COLUMNS, ROWS, encodeCells } from './raster'
 import { type Tier, miniCells, miniProp, pickTier, shrink } from './sizes'
 import { THEMES, type ThemeName, type WordState, isThemeName } from './themes'
 
-const FRAME_MS = 125
+const FRAME_MS = 83                // about 12 frames a second
 const IDLE_MS = 120_000
 const SIDE_COLUMNS = 14           // room beside Clawd for the state label and the hotkey buttons
 const SIZE: Record<Exclude<Tier, 'status'>, { columns: number; rows: number }> = {
@@ -226,21 +226,16 @@ export const register: Register = on => {
     )
   })
 
-  // Clicks and pointer moves from the overlay over Clawd (fullscreen layout only).
+  // Clicks from the overlay over Clawd (fullscreen layout only).
   on('ui.message', async ($, e, next) => {
     if (e.element !== 'clawd-hit') return next(e)
     const d = (e.data ?? {}) as { t?: string; x?: number; y?: number; downs?: number; dx?: number; dy?: number }
-    // A click: either newly counted by the overlay (it may ride on a later move), or a bare 'down'.
+    // A click: newly counted by the overlay's running total, or a bare 'down'.
     let click: [number, number] | null = null
     if (typeof d.downs === 'number' && typeof d.dx === 'number' && typeof d.dy === 'number') {
       if (d.downs < seenDowns) seenDowns = 0            // a fresh overlay instance counts from zero
       if (d.downs > seenDowns) { seenDowns = d.downs; click = [d.dx, d.dy] }
     } else if (d.t === 'down' && typeof d.x === 'number' && typeof d.y === 'number') click = [d.x, d.y]
-    if (d.t === 'leave') m.look = null
-    if (d.t === 'move' && typeof d.x === 'number' && typeof d.y === 'number') {
-      const [mx, my] = cellToPixel(tier, d.x, d.y)
-      m.look = lookFrom(mx, my)
-    }
     if (!click) return {}
     const [px, py] = cellToPixel(tier, click[0], click[1])
     const region = regionAt(m.state, THEMES[theme].style, px, py)

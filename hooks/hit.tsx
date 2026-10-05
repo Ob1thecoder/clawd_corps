@@ -1,6 +1,7 @@
 import type { ClientModule } from 'claude-code'
 
-// An empty region laid over Clawd's Raster: it draws nothing and reports the pointer, by cell, to register.tsx.
+// An empty region laid over Clawd's Raster: it draws nothing and reports clicks only, by cell, to register.tsx.
+// Pointer moves are deliberately not reported: they would stream a message every frame for nothing.
 // The terminal sends pointer events in the fullscreen layout only; elsewhere the hotkey buttons stand in.
 type HitProps = { columns?: number; rows?: number }
 
@@ -12,9 +13,11 @@ const Hit: ClientModule = (props, surface) => {
     let dx = 0
     let dy = 0
     surface.onPointer(ev => {
-      if (ev.type === 'down') { downs++; dx = ev.x; dy = ev.y }
-      if (ev.type === 'down' || ev.type === 'move') surface.post({ t: ev.type, x: ev.x, y: ev.y, downs, dx, dy })
-      if (ev.type === 'leave') surface.post({ t: 'leave', downs, dx, dy })
+      if (ev.type !== 'down') return
+      downs++
+      dx = ev.x
+      dy = ev.y
+      surface.post({ t: 'down', x: ev.x, y: ev.y, downs, dx, dy })
     })
     surface.setState(true)
   }

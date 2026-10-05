@@ -214,3 +214,13 @@ test('a click is not lost to a pointer move in the same frame', async ($, on) =>
   expect((await ui.find({ key: 'clawd-state' }))?.text).toMatch(/BUILDING ×2/)
   await ui.unmount()
 })
+
+test('frames come at 12 a second', async ($, on) => {
+  let blits = 0
+  on('ui.blit', () => { blits++; return { value: {} } })
+  const clock = await start($, on)
+  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  await clock?.advance(1000)
+  expect(blits).toBeGreaterThanOrEqual(11)
+  await ui.unmount()
+})
