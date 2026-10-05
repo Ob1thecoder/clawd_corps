@@ -6,13 +6,17 @@ import { A } from './anims'
 import { type Claims, REFRESH_MS, claimFor, label as corpsLabel, prune } from './claims'
 import { type StoryEvent, createMachine, current, fire, peek, render, tick, whack } from './machine'
 import { COLUMNS, ROWS, encodeCells } from './raster'
+import type { Grid } from './pixels'
 import { type Tier, miniCells, miniProp, pickTier, shrink } from './sizes'
-import { type Paint, THEMES, type ThemeName, type WordState, corpsOf } from './themes'
+import { CORPS, type Paint, THEMES, type ThemeName, type WordState, corpsOf } from './themes'
 
 const FRAME_MS = 83                // about 12 frames a second
 const IDLE_MS = 120_000
 // One action per hotkey button: p poke/whip/wake, r ring, w whack/peek, h hide.
-type Action = 'p' | 'r' | 'w' | 'h'
+type Action = 'p' | 'r' | 'w' | 'h' | 'c'
+
+const PICKER = 'clawd-corps'
+const CHOICES: readonly ThemeName[] = [...CORPS, 'classic']
 
 const SIDE_COLUMNS = 14           // room beside Clawd for the state label and the hotkey buttons
 const SIZE: Record<Exclude<Tier, 'status'>, { columns: number; rows: number }> = {
@@ -109,6 +113,24 @@ function label(): string {
   return `${prop}${word}${m.boost > 0 && m.state === 'building' ? ' ×2' : ''}`
 }
 
+async function openPicker($: EngineInterface): Promise<void> {
+  await $.ui.open({ id: PICKER, title: 'Choose your corps' })
+}
+
+async function pick($: EngineInterface, name: ThemeName): Promise<void> {
+  await setTheme($, name)
+  await $.ui.close({ id: PICKER })
+}
+
+// A choice's symbol as 9 x 4 cells: the corps badge in its colours; classic is a plain orange disc.
+function symbolCells(name: ThemeName): string {
+  const t = THEMES[name]
+  const bg = name === 'classic' ? t.body : t.ring.badgeBg
+  const fg = name === 'classic' ? t.body : t.ring.badgeFg
+  const g: Grid = [...t.badge, '.........'].map(row => [...row].map(ch => (ch === 'W' ? bg : ch === 'D' ? fg : null)))
+  return encodeCells(g)
+}
+
 // Switches this session's corps (or back to classic): its claim follows, and Clawd transforms.
 async function setTheme($: EngineInterface, name: ThemeName): Promise<void> {
   const before = theme
@@ -126,6 +148,7 @@ async function act($: EngineInterface, a: Action): Promise<void> {
   if (a === 'p') send($, m.state === 'doze' ? 'typing' : m.state === 'building' ? 'whip' : 'poke')
   if (a === 'r') await setTheme($, THEMES[theme].style === 'lantern' ? 'classic' : lastCorps)
   if (a === 'w' && (whack(m) || peek(m))) $.ui.invalidate('ui.render')
+  if (a === 'c') await openPicker($)
   if (a === 'h') {
     await update($, enabledAtom, () => false)
     await $.store.set('enabled', false)
@@ -268,7 +291,7 @@ export const register: Register = on => {
     const size = SIZE[t]
     const room = e.props.bodyColumns - size.columns
     const keys = room >= SIDE_COLUMNS && t !== 'mini'
-    const keyLabels: Record<Action, string> = { p: m.state === 'building' ? 'whip' : m.state === 'doze' ? 'wake' : 'poke', r: 'ring', w: m.state === 'planning' ? 'peek' : 'whack', h: 'hide' }
+    const keyLabels: Record<Action, string> = { p: m.state === 'building' ? 'whip' : m.state === 'doze' ? 'wake' : 'poke', r: 'ring', w: m.state === 'planning' ? 'peek' : 'whack', h: 'hide', c: 'corps' }
     return (
       <Box flexDirection="row">
         <Box key="clawd-stage" width={size.columns} height={size.rows}>
@@ -282,11 +305,38 @@ export const register: Register = on => {
                 {label()}
               </Text>
             </Box>
-            {keys && (['p', 'r', 'w', 'h'] as const).map(a => (
+            {keys && (['p', 'r', 'w', 'c', 'h'] as const).map(a => (
               <Button key={`clawd-key-${a}`} label={keyLabels[a]} hotkey={a} plain onPress={() => { void act($, a) }} />
             ))}
           </Box>
         )}
+      </Box>
+    )
+  })
+
+  // The corps picker: each choice is its symbol plus a button you can click, or press its number.
+  on('ui.render', { component: 'Pane', requestId: PICKER }, async ($, e, next) => {
+    if (e.surface !== 'terminal') return next(e)          // Clawd is terminal-only
+    const { Box, Button, Raster, Text } = $.ui.resolve(e)
+    const now = await $.clock.now()
+    const claims = prune(asClaims(await $.store.get('claims')), now)
+    const worn = new Set(Object.entries(claims).filter(([id]) => id !== sessionId).map(([, c]) => c.theme))
+    return (
+      <Box flexDirection="column">
+        {CHOICES.map((name, i) => (
+          <Box key={`row-${name}`} flexDirection="row">
+            <Raster key={`sym-${name}`} columns={9} rows={4} cells={symbolCells(name)} />
+            <Text> </Text>
+            <Button
+              key={`pick-${name}`}
+              label={`${THEMES[name].title}${name === theme ? ' ✓' : ''}${worn.has(name) ? ' (in use)' : ''}`}
+              hotkey={String(i + 1)}
+              plain
+              onPress={() => { void pick($, name) }}
+            />
+          </Box>
+        ))}
+        <Text dimColor>Click a lantern or press its number. Esc closes.</Text>
       </Box>
     )
   })
@@ -300,6 +350,10 @@ export const register: Register = on => {
 
   on('command.run', { command: 'clawd' }, async ($, e) => {
     const arg = e.args.trim().toLowerCase()
+    if (arg === 'corps') {
+      await openPicker($)
+      return { text: 'Choose your corps in the pane.' }
+    }
     const name = corpsOf(arg)
     if (name) {
       await setTheme($, name)

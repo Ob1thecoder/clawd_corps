@@ -280,3 +280,50 @@ test('/clawd red switches only this session, by name', async ($, on) => {
   expect((await clawd($, 'purple')).text).toMatch(/Usage/)
   await clock?.advance(10)
 })
+
+// ---- the corps picker ----
+
+const PICKER = {
+  component: 'Pane',
+  requestId: 'clawd-corps',
+  props: { title: 'Choose your corps', isFocused: true, bodyColumns: 50, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
+} as const
+
+test('the corps button and /clawd corps open the picker pane', async ($, on) => {
+  const opened: string[] = []
+  on('ui.open', (_$, e) => { opened.push((e as { id: string }).id); return { value: { isPlaced: true } } })
+  await start($, on)
+  const band = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  expect(await band.find({ key: 'clawd-key-c' })).toBeDefined()
+  await band.press({ key: 'clawd-key-c' })
+  await band.unmount()
+  await clawd($, 'corps')
+  expect(opened).toEqual(['clawd-corps', 'clawd-corps'])
+})
+
+test('the picker lists all eight choices with their symbols, marking colours other sessions wear', async ($, on) => {
+  await start($, on, { store: { claims: { other: { theme: 'blue', n: 1, at: 0 } } } })
+  const pane = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...PICKER })
+  for (const n of ['lantern', 'blue', 'red', 'yellow', 'violet', 'white', 'black', 'classic']) {
+    expect(await pane.find({ key: `pick-${n}` })).toBeDefined()
+    expect(await pane.find({ key: `sym-${n}` })).toBeDefined()
+  }
+  expect((await pane.find({ key: 'pick-blue' }))?.props.label).toMatch(/in use/)
+  expect((await pane.find({ key: 'pick-red' }))?.props.label).not.toMatch(/in use/)
+  await pane.unmount()
+})
+
+test('clicking a lantern in the picker switches this session and closes the pane', async ($, on) => {
+  const closed: string[] = []
+  on('ui.close', (_$, e) => { closed.push((e as { id: string }).id); return { value: undefined } })
+  on('ui.blit', () => ({ value: {} }))
+  const clock = await start($, on)
+  const pane = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...PICKER })
+  await pane.press({ key: 'pick-red' })
+  await pane.unmount()
+  expect(closed).toEqual(['clawd-corps'])
+  const band = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  await clock?.advance(5000)
+  await band.unmount()
+  expect((await bodyColors($)).has(hexColor(THEMES.red.floor))).toBe(true)
+})
