@@ -41,3 +41,11 @@ test('eyes look toward the pointer', () => {
   expect(lookFrom(20, 0)).toBe('up')
   expect(lookFrom(21, 19)).toBe('down')
 })
+
+test('Green Lantern: the clipboard wins over the ring while planning, and the worn ring is clickable', () => {
+  expect(regionAt('planning', 'lantern', 42, 12)).toBe('plan')
+  expect(regionAt('showplan', 'lantern', 40, 10)).toBe('plan')
+  expect(regionAt('idle', 'lantern', 36, 13)).toBe('ring')
+  expect(regionAt('idle', 'lantern', 41, 12)).toBe(null)
+  expect(regionAt('building', 'lantern', 40, 12)).toBe('ring')
+})

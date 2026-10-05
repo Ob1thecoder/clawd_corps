@@ -10,9 +10,13 @@ export type Action = 'p' | 'r' | 'w' | 'h'
 // What a click at pixel (x, y) of the full-size scene lands on.
 export function regionAt(state: LoopState, style: Style, x: number, y: number): Region | null {
   if (style === 'classic' && x >= 52 && y <= 3) return 'ring'
-  if (style === 'lantern' && x >= 38 && x <= 44 && y >= 9 && y <= 15) return 'ring'
-  if (state === 'building' && y >= 11 && x >= (style === 'lantern' ? 46 : 40)) return 'nail'
   if ((state === 'planning' || state === 'showplan') && x >= 39 && y >= 2) return 'plan'
+  // A Green Lantern's ring: on the outstretched fist while building, else the glint at the claw tip.
+  if (style === 'lantern') {
+    const onRing = state === 'building' ? x >= 38 && x <= 44 && y >= 9 && y <= 15 : x >= 35 && x <= 37 && y >= 12 && y <= 15
+    if (onRing) return 'ring'
+  }
+  if (state === 'building' && y >= 11 && x >= (style === 'lantern' ? 46 : 40)) return 'nail'
   if (x >= 2 && x <= 37 && y >= 3 && y <= 18) return 'clawd'
   return null
 }

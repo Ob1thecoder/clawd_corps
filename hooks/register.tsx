@@ -30,6 +30,8 @@ let framesOn = false
 let tier: Tier = 'full'
 let frameCount = 0
 let statusShown = false
+let frameGen = 0                 // bumped whenever the frame timer starts or stops; stale frames check it
+let seenDowns = 0                // clicks already handled from the overlay's running count
 let idleTimer: Timer | null = null
 
 function send($: EngineInterface, ev: StoryEvent): void {
@@ -86,15 +88,17 @@ function poke($: EngineInterface): void {
   idleTimer = $.clock.after(IDLE_MS, () => send($, 'idle2m'))
 }
 
-async function onFrame($: EngineInterface): Promise<void> {
-  if (!bandId || !enabled) return
+async function onFrame($: EngineInterface, gen: number): Promise<void> {
+  if (gen !== frameGen || !bandId || !enabled) return
   tick(m)
   frameCount++
   const r = await $.ui.blit({ requestId: bandId, key: 'clawd', cells: frameCells(tier) })
-  if (r.deny) stopFrames()
+  // A refusal for a frame sent before a resize or remount is about a Raster that is gone: ignore it.
+  if (r.deny && gen === frameGen) stopFrames()
 }
 
 function stopFrames(): void {
+  frameGen++
   bandId = null
   framesOn = false
   frameTimer?.cancel()
@@ -189,7 +193,8 @@ export const register: Register = on => {
     if (!framesOn) {
       frameTimer?.cancel()
       framesOn = true
-      frameTimer = $.clock.every(FRAME_MS, () => { onFrame($).catch(stopFrames) })
+      const gen = ++frameGen
+      frameTimer = $.clock.every(FRAME_MS, () => { onFrame($, gen).catch(() => { if (gen === frameGen) stopFrames() }) })
     }
     const { Box, Button, Client, Raster, Text } = $.ui.resolve(e)
     const size = SIZE[t]
@@ -224,12 +229,21 @@ export const register: Register = on => {
   // Clicks and pointer moves from the overlay over Clawd (fullscreen layout only).
   on('ui.message', async ($, e, next) => {
     if (e.element !== 'clawd-hit') return next(e)
-    const d = (e.data ?? {}) as { t?: string; x?: number; y?: number }
-    if (d.t === 'leave') { m.look = null; return {} }
-    if (typeof d.x !== 'number' || typeof d.y !== 'number') return {}
-    const [px, py] = cellToPixel(tier, d.x, d.y)
-    if (d.t === 'move') { m.look = lookFrom(px, py); return {} }
-    const region = d.t === 'down' ? regionAt(m.state, THEMES[theme].style, px, py) : null
+    const d = (e.data ?? {}) as { t?: string; x?: number; y?: number; downs?: number; dx?: number; dy?: number }
+    // A click: either newly counted by the overlay (it may ride on a later move), or a bare 'down'.
+    let click: [number, number] | null = null
+    if (typeof d.downs === 'number' && typeof d.dx === 'number' && typeof d.dy === 'number') {
+      if (d.downs < seenDowns) seenDowns = 0            // a fresh overlay instance counts from zero
+      if (d.downs > seenDowns) { seenDowns = d.downs; click = [d.dx, d.dy] }
+    } else if (d.t === 'down' && typeof d.x === 'number' && typeof d.y === 'number') click = [d.x, d.y]
+    if (d.t === 'leave') m.look = null
+    if (d.t === 'move' && typeof d.x === 'number' && typeof d.y === 'number') {
+      const [mx, my] = cellToPixel(tier, d.x, d.y)
+      m.look = lookFrom(mx, my)
+    }
+    if (!click) return {}
+    const [px, py] = cellToPixel(tier, click[0], click[1])
+    const region = regionAt(m.state, THEMES[theme].style, px, py)
     if (region) await act($, actionFor(region))
     return {}
   })

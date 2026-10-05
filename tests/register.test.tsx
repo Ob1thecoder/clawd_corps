@@ -183,3 +183,34 @@ test('the hide hotkey button turns Clawd off', async ($, on) => {
   expect(await ui.find({ key: 'clawd' })).toBeUndefined()
   await ui.unmount()
 })
+
+test('a frame refused from before a resize does not stop the new animation', async ($, on) => {
+  let release: () => void = () => {}
+  const held = new Promise<void>(r => { release = r })
+  let blits = 0
+  on('ui.blit', async () => {
+    blits++
+    if (blits === 1) { await held; return { deny: 'another size' } }
+    return { value: {} }
+  })
+  const clock = await start($, on)
+  const full = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  await clock?.advance(125)                       // first frame's blit is now in flight
+  const compact = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND(40, 6) })
+  release()                                       // ...and comes back refused, after the resize
+  await clock?.advance(125 * 4)
+  expect(blits).toBeGreaterThan(2)
+  await compact.unmount()
+  await full.unmount()
+})
+
+test('a click is not lost to a pointer move in the same frame', async ($, on) => {
+  await start($, on)
+  await $.tool.call({ tool: 'Edit', file_path: '/tmp/a.txt', old_string: 'a', new_string: 'b' })
+  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  void ui.pointer({ type: 'down', x: 20, y: 6, button: 'left', in: 'clawd-hit' })
+  await ui.pointer({ type: 'move', x: 21, y: 6, in: 'clawd-hit' })
+  await ui.advance(125)
+  expect((await ui.find({ key: 'clawd-state' }))?.text).toMatch(/BUILDING ×2/)
+  await ui.unmount()
+})
