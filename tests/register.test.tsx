@@ -43,9 +43,10 @@ test('the band draws a 58x10 Raster and a state label on the terminal', async ($
   await ui.unmount()
 })
 
-test('the band yields when too narrow or too short, and on other surfaces', async ($, on) => {
+test('the band yields when there is no room even for mini, and on other surfaces', async ($, on) => {
+  on('ui.status', () => ({ value: undefined }))
   await start($, on)
-  for (const band of [BAND(57), BAND(80, 9)]) {
+  for (const band of [BAND(15), BAND(80, 2)]) {
     const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...band })
     expect(await ui.find({ key: 'clawd' })).toBeUndefined()
     await ui.unmount()
@@ -134,5 +135,51 @@ test('/clawd lantern while hammering transforms Clawd and keeps it hammering', a
   expect((await clawd($, 'lantern')).text).toMatch(/Green Lantern/)
   const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
   expect((await ui.find({ key: 'clawd-state' }))?.text).toMatch(/BUILDING/)
+  await ui.unmount()
+})
+
+// ---- clicks, hotkeys and sizes ----
+
+async function rasterSize($: Engine, cols: number, rows: number) {
+  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND(cols, rows) })
+  const r = await ui.find({ key: 'clawd' })
+  await ui.unmount()
+  return r ? [r.props.columns, r.props.rows] : null
+}
+
+test('the band picks full, compact or mini by its room, else yields to the status line', async ($, on) => {
+  on('ui.status', () => ({ value: undefined }))
+  await start($, on)
+  expect(await rasterSize($, 80, 12)).toEqual([58, 10])
+  expect(await rasterSize($, 40, 6)).toEqual([29, 5])
+  expect(await rasterSize($, 20, 3)).toEqual([9, 3])
+  expect(await rasterSize($, 12, 2)).toBe(null)
+})
+
+test('a click on Clawd while hammering cracks the whip: double speed', async ($, on) => {
+  await start($, on)
+  await $.tool.call({ tool: 'Edit', file_path: '/tmp/a.txt', old_string: 'a', new_string: 'b' })
+  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  await ui.post({ t: 'down', x: 20, y: 6 }, { in: 'clawd-hit' })
+  expect((await ui.find({ key: 'clawd-state' }))?.text).toMatch(/BUILDING ×2/)
+  await ui.unmount()
+})
+
+test('a click on the ring transforms orange Clawd into a Green Lantern', async ($, on) => {
+  on('ui.blit', () => ({ value: {} }))
+  const clock = await start($, on)
+  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  await ui.post({ t: 'down', x: 54, y: 0 }, { in: 'clawd-hit' })
+  await clock?.advance(40 * 125)          // let the hop-in and the 20-frame suit-up play out
+  await ui.unmount()
+  expect((await bodyColors($)).has(0x123a22)).toBe(true)
+})
+
+test('the hide hotkey button turns Clawd off', async ($, on) => {
+  await start($, on)
+  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  expect(await ui.find({ key: 'clawd-key-p' })).toBeDefined()
+  await ui.press({ key: 'clawd-key-h' })
+  expect(await ui.find({ key: 'clawd' })).toBeUndefined()
   await ui.unmount()
 })
