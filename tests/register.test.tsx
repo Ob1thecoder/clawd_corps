@@ -11,12 +11,14 @@ const BAND = (bodyColumns = 80, maxRows = 12) =>
     props: { hasSurvey: false, isWorking: false, maxRows, bodyColumns, scroll: { offset: 0, bodyRows: maxRows }, view: {} },
   }) as const
 
+let commandsRun: { command: string; args: string }[] = []   // slash commands Clawd ran, as the engine saw them
 let sessionIdNow = 'this-session'   // what $.session.id() answers; a test can change it (a /clear)
 
 async function start($: Engine, on: On, opts: { clock?: boolean; store?: Record<string, unknown> | false; interactive?: boolean } = {}) {
   on('session.start', () => ({ cwd: '/' }))
   on('command.register', () => ({ value: { command: 'clawd' } }))
   on('session.id', () => ({ value: sessionIdNow }))
+  commandsRun = []
   if (opts.store !== false) mock.store(on, opts.store)
   const clock = opts.clock === false ? null : mock.clock(on)
   on('ui.render', ($e, e) => {
@@ -24,7 +26,7 @@ async function start($: Engine, on: On, opts: { clock?: boolean; store?: Record<
     return <Box key="engine" />
   })
   on('tool.call', () => ({ result: 'ok' }))
-  on('command.run', () => ({ text: '' }))
+  on('command.run', (_$, e) => { commandsRun.push(e as { command: string; args: string }); return { text: '' } })
   on('turn.complete', () => ({ text: '' }))
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: opts.interactive ?? true })
   return clock
@@ -387,4 +389,44 @@ test('the picker opens focused and closes on Escape, so its number keys work', a
   await start($, on)
   await clawd($, 'corps')
   expect(opened[0]).toMatchObject({ id: 'clawd-corps', focus: true, closeOnEscape: true })
+})
+
+// ---- the prompt bar follows the corps, through /color ----
+
+const colorRuns = () => commandsRun.filter(c => c.command === 'color').map(c => c.args)
+
+test('a session sets the prompt bar to its corps colour with /color', async ($, on) => {
+  const clock = await start($, on)
+  await clock?.advance(10)
+  expect(colorRuns()).toEqual(['green'])
+})
+
+test('switching corps recolours the prompt bar; violet is purple, white is default, classic is orange', async ($, on) => {
+  const clock = await start($, on)
+  for (const name of ['violet', 'white', 'classic', 'black']) { await clawd($, name); await clock?.advance(10) }
+  expect(colorRuns()).toEqual(['green', 'purple', 'default', 'orange', 'default'])
+})
+
+test('the same colour is not set twice', async ($, on) => {
+  const clock = await start($, on)
+  await clawd($, 'green')
+  await clock?.advance(10)
+  expect(colorRuns()).toEqual(['green'])
+})
+
+test('a non-interactive run leaves the prompt bar alone', async ($, on) => {
+  const clock = await start($, on, { interactive: false })
+  await clock?.advance(10)
+  expect(colorRuns()).toEqual([])
+})
+
+test('after /clear the prompt bar colour is set again for the new session', async ($, on) => {
+  on('session.end', (_$, e) => ({ sessionId: (e as { sessionId: string }).sessionId }))
+  const clock = await start($, on)
+  await clock?.advance(10)
+  sessionIdNow = 'after-clear-2'
+  await $.session.end({ reason: 'clear', sessionId: 'this-session', resume: {} } as never)
+  await clock?.advance(10)
+  sessionIdNow = 'this-session'
+  expect(colorRuns()).toEqual(['green', 'green'])
 })

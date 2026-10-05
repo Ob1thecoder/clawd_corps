@@ -46,7 +46,8 @@ let lastCorps: ThemeName = 'lantern'   // the corps the ring hotkey goes back to
 let sessionId = ''               // this session's id, the key of its colour claim
 let corpsN = 1                   // 2, 3... when every colour is taken and this one is shared
 let fromTheme: ThemeName = 'lantern'   // the corps being left while powering down
-let refreshTimer: Timer | null = null             // calm loops advance on every other timer tick
+let refreshTimer: Timer | null = null
+let promptColor = ''             // the /color last set, so the same colour isn't set twice             // calm loops advance on every other timer tick
 let idleTimer: Timer | null = null
 
 function send($: EngineInterface, ev: StoryEvent): void {
@@ -89,6 +90,15 @@ async function writeClaim($: EngineInterface, name: ThemeName | null): Promise<v
   await $.store.set('claims', claims)
   corpsN = mine.n
   if (mine.theme !== theme) { theme = mine.theme; await update($, themeAtom, () => mine.theme) }
+}
+
+// Tints Claude Code's prompt bar to this session's colour through /color, queued until the session is idle.
+// Only when the colour changes, so a /color the person ran themselves stands until the corps changes.
+function applyPromptColor($: EngineInterface): void {
+  const want = THEMES[theme].prompt
+  if (!sessionId || want === promptColor) return
+  promptColor = want
+  $.clock.after(0, () => { void $.command.run({ command: 'color', args: want }).catch(() => { promptColor = '' }) })
 }
 
 function keepClaim($: EngineInterface): void {
@@ -134,6 +144,7 @@ async function setTheme($: EngineInterface, name: ThemeName): Promise<void> {
   theme = name
   await update($, themeAtom, () => name)
   await writeClaim($, name)
+  applyPromptColor($)
   if (name === before || !(await read($, enabledAtom))) return
   if (THEMES[name].style === 'lantern') send($, 'suitup')
   else { fromTheme = before; send($, 'powerdown') }
@@ -196,6 +207,7 @@ export const register: Register = on => {
       sessionId = await $.session.id()
       await writeClaim($, null)
       keepClaim($)
+      applyPromptColor($)
     }
     if (e.isInteractive && e.surface === 'terminal') {
       send($, THEMES[theme].style === 'lantern' ? 'startSuited' : 'start')
@@ -218,6 +230,8 @@ export const register: Register = on => {
       sessionId = await $.session.id()
       await writeClaim($, theme)
       keepClaim($)
+      promptColor = ''                 // a new session id may start with a plain prompt bar: set it again
+      applyPromptColor($)
     }
     return r
   })

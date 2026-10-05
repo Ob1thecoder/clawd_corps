@@ -25,6 +25,16 @@ curl -fsSL https://raw.githubusercontent.com/Ob1thecoder/clawd_corps/main/instal
   - Clawd hops in orange, then suits up into its corps.
   - In a corps, Clawd's ring projects a glowing construct hammer instead of a steel one.
   - Each corps has its own palette, chest symbol, spinner words, name tag (`◆ BLUE LANTERN`), and a colored line just above the prompt.
+  - **The prompt bar takes the session's color too**, through Claude Code's own `/color`. Clawd runs it for you whenever the color changes:
+
+    | Corps | Prompt bar |
+    |---|---|
+    | Green, Blue, Red, Yellow | the matching color |
+    | Violet | purple |
+    | Orange | orange |
+    | White, Black | `default` (`/color` has no white or black) |
+
+    If you run `/color` yourself, your choice stands until the corps changes.
 - **Corps picker.**
   - Click the `corps` button beside Clawd, or type `/clawd corps`, to choose a color for this session.
   - Colors other sessions are wearing are marked "(in use)".
