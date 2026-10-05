@@ -100,7 +100,8 @@ test('no frame timer runs until the band is drawn', async ($, on) => {
   await start($, on, { clock: false })
   expect(everies).toBe(0)
   const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
-  expect(everies).toBe(1)
+  // clock.every is dispatched once per period, so this counts ticks: any count means the timer is running.
+  expect(everies).toBeGreaterThan(0)
   await ui.unmount()
 })
 
@@ -220,6 +221,31 @@ test('frames come at 12 a second', async ($, on) => {
   on('ui.blit', () => { blits++; return { value: {} } })
   const clock = await start($, on)
   const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  await clock?.advance(1000)
+  expect(blits).toBeGreaterThanOrEqual(11)
+  await ui.unmount()
+})
+
+test('a calm Clawd sends few frames: identical frames are skipped and the pace halves', async ($, on) => {
+  let blits = 0
+  on('ui.blit', () => { blits++; return { value: {} } })
+  const clock = await start($, on)
+  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  await clock?.advance(3000)                 // the hop-in finishes; Clawd is idle
+  blits = 0
+  await clock?.advance(2000)
+  expect(blits).toBeLessThanOrEqual(4)
+  await ui.unmount()
+})
+
+test('while working, frames still come at full pace', async ($, on) => {
+  let blits = 0
+  on('ui.blit', () => { blits++; return { value: {} } })
+  const clock = await start($, on)
+  await $.tool.call({ tool: 'Edit', file_path: '/tmp/a.txt', old_string: 'a', new_string: 'b' })
+  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  await clock?.advance(3000)
+  blits = 0
   await clock?.advance(1000)
   expect(blits).toBeGreaterThanOrEqual(11)
   await ui.unmount()

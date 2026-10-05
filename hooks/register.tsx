@@ -3,7 +3,7 @@ import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { ClawdThemeName } from '../types'
 import { type Action, actionFor, cellToPixel, regionAt } from './hits'
-import { type StoryEvent, createMachine, fire, peek, render, tick, whack } from './machine'
+import { type StoryEvent, createMachine, current, fire, peek, render, tick, whack } from './machine'
 import { COLUMNS, ROWS, encodeCells } from './raster'
 import { type Tier, miniCells, miniProp, pickTier, shrink } from './sizes'
 import { THEMES, type ThemeName, type WordState, isThemeName } from './themes'
@@ -15,6 +15,7 @@ const SIZE: Record<Exclude<Tier, 'status'>, { columns: number; rows: number }> =
   full: { columns: COLUMNS, rows: ROWS }, compact: { columns: COLUMNS / 2, rows: ROWS / 2 }, mini: { columns: 9, rows: 3 },
 }
 const BUILD_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit', 'Bash'])
+const CALM = new Set(['idle', 'doze', 'waiting', 'showplan'])
 
 const enabledAtom = atom({ plugin: 'clawd', key: 'enabled' } as const, true)
 const themeAtom = atom({ plugin: 'clawd', key: 'theme' } as const, 'classic' as ClawdThemeName)
@@ -31,6 +32,8 @@ let tier: Tier = 'full'
 let frameCount = 0
 let statusShown = false
 let frameGen = 0                 // bumped whenever the frame timer starts or stops; stale frames check it
+let lastCells = ''               // the cells last sent; an identical frame isn't sent again
+let calmSkip = false             // calm loops advance on every other timer tick
 let seenDowns = 0                // clicks already handled from the overlay's running count
 let idleTimer: Timer | null = null
 
@@ -90,9 +93,16 @@ function poke($: EngineInterface): void {
 
 async function onFrame($: EngineInterface, gen: number): Promise<void> {
   if (gen !== frameGen || !bandId || !enabled) return
+  // Calm loops (idle, dozing, waiting on you, showing the plan) run at half pace; transitions and work stay at full.
+  const calm = current(m).loop && CALM.has(m.state) && m.boost === 0
+  calmSkip = calm && !calmSkip
+  if (calmSkip) return
   tick(m)
   frameCount++
-  const r = await $.ui.blit({ requestId: bandId, key: 'clawd', cells: frameCells(tier) })
+  const cells = frameCells(tier)
+  if (cells === lastCells) return
+  lastCells = cells
+  const r = await $.ui.blit({ requestId: bandId, key: 'clawd', cells })
   // A refusal for a frame sent before a resize or remount is about a Raster that is gone: ignore it.
   if (r.deny && gen === frameGen) stopFrames()
 }
@@ -204,7 +214,7 @@ export const register: Register = on => {
     return (
       <Box flexDirection="row">
         <Box key="clawd-stage" width={size.columns} height={size.rows}>
-          <Raster key="clawd" columns={size.columns} rows={size.rows} cells={frameCells(t)} />
+          <Raster key="clawd" columns={size.columns} rows={size.rows} cells={(lastCells = frameCells(t))} />
           <Box key="clawd-hit-layer" position="absolute" top={0} left={0}>
             <Client key="clawd-hit" module="./hit.tsx" props={size} width={size.columns} height={size.rows} />
           </Box>
