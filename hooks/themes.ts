@@ -1,0 +1,52 @@
+export type ThemeName = 'lantern' | 'classic'
+export type WordState = 'idle' | 'doze' | 'thinking' | 'planning' | 'showplan' | 'building' | 'waiting'
+export type Paint = { body: string; floor: string }
+export type Theme = Paint & { title: string; words: Record<WordState, readonly string[]> }
+
+export const THEMES: Record<ThemeName, Theme> = {
+  lantern: {
+    title: 'Green Lantern',
+    body: '#3dff74',
+    floor: '#123a22',
+    words: {
+      idle: ['In brightest day'],
+      doze: ['Recharging the ring'],
+      thinking: ['Consulting the Guardians', 'Focusing willpower', 'Scanning Sector 2814'],
+      planning: ['Drafting the blueprint', 'Surveying Sector 2814', 'Sketching the construct'],
+      showplan: ['Awaiting the Guardians'],
+      building: ['Charging the ring', 'Forging a construct', 'Willpower at maximum', 'Hammering in green'],
+      waiting: ['Awaiting your word'],
+    },
+  },
+  classic: {
+    title: 'Classic',
+    body: '#d97757',
+    floor: '#3a2c25',
+    words: {
+      idle: ['Ready'],
+      doze: ['Napping'],
+      thinking: ['Thinking', 'Pondering', 'Mulling'],
+      planning: ['Sketching', 'Drafting', 'Mapping it out'],
+      showplan: ['Waiting on your verdict'],
+      building: ['Building', 'Hammering', 'Nailing it down', 'Assembling'],
+      waiting: ['Waiting on you'],
+    },
+  },
+}
+
+export function isThemeName(s: string): s is ThemeName {
+  return s === 'lantern' || s === 'classic'
+}
+
+export const C = {
+  hat: '#ffcc1a', hatHi: '#fff0a0', hatShade: '#c98f00', brim: '#e0a800',
+  steel: '#9aa5b5', steelHi: '#e9eef5', steelDk: '#566173', face: '#ffffff',
+  handle: '#b07434', handleHi: '#d39a58', grip: '#3a2a20',
+  nail: '#c9d1d9', nailHi: '#ffffff', wood: '#9a6432', woodHi: '#c08a52', grain: '#6e4420',
+  spark: '#ffe066', sparkHi: '#ffffff', trail: '#56645b',
+  board: '#8a5a2e', boardHi: '#a8743f', paper: '#f4f1ea', rule: '#cfdcec',
+  clip: '#9aa5b5', clipDk: '#566173', wrinkle: '#b9b4aa',
+  ink: '#2b3140', check: '#1f9e4a',
+  pTip: '#2b3140', pWood: '#e8c48a', pBody: '#ffcc1a', pBodyDk: '#d9a400', pFerrule: '#b8c0cc', pEraser: '#f28aa0',
+  bubble: '#c9d1d9', bang: '#ffe066', red: '#ff5a5a', sweat: '#7fc8ff', zz: '#c9d1d9',
+} as const
