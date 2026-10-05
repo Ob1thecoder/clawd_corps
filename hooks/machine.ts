@@ -39,7 +39,10 @@ function plan(m: Machine, ev: StoryEvent): Plan | null {
       if (s === 'idle' || s === 'thinking' || s === 'building') return { seq: [A.clipIn], to: 'planning', set: { clip: true } }
       return null
     case 'planshown':
-      return s === 'planning' ? { seq: [A.showIn], to: 'showplan', set: {} } : null
+      if (s === 'planning') return { seq: [A.showIn], to: 'showplan', set: {} }
+      // Plan mode entered with Shift+Tab never calls EnterPlanMode: bring the clipboard out first.
+      if (s === 'idle' || s === 'thinking' || s === 'building') return { seq: [A.clipIn, A.showIn], to: 'showplan', set: { clip: true } }
+      return null
     case 'approve':
       return s === 'showplan' ? { seq: [A.clipOut, A.hatOn], to: 'building', set: { clip: false, hat: true } } : null
     case 'reject':

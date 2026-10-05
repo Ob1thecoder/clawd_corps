@@ -94,3 +94,12 @@ test('render returns a full grid for the current frame', () => {
   const g = render(m, THEMES.classic)
   expect(g.some(row => row.some(c => c === THEMES.classic.body))).toBe(true)
 })
+
+test('a plan shown without EnterPlanMode (Shift+Tab plan mode) still brings out the clipboard', () => {
+  const m = createMachine()
+  for (const ev of ['start', 'prompt'] as const) fire(m, ev, true)
+  expect(fire(m, 'planshown')).toBe(true)
+  expect(m.state).toBe('showplan')
+  expect(m.seq.slice(0, 2)).toEqual([A.clipIn, A.showIn])
+  expect(m.props.clip).toBe(true)
+})

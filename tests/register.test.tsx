@@ -8,18 +8,20 @@ const BAND = (bodyColumns = 80, maxRows = 12) =>
     props: { hasSurvey: false, isWorking: false, maxRows, bodyColumns, scroll: { offset: 0, bodyRows: maxRows }, view: {} },
   }) as const
 
-async function start($: Engine, on: On) {
+async function start($: Engine, on: On, opts: { clock?: boolean } = {}) {
   on('session.start', () => ({ cwd: '/' }))
   on('command.register', () => ({ value: { command: 'clawd' } }))
   mock.store(on)
-  mock.clock(on)
+  const clock = opts.clock === false ? null : mock.clock(on)
   on('ui.render', ($e, e) => {
     const { Box } = $e.ui.resolve(e)
     return <Box key="engine" />
   })
   on('tool.call', () => ({ result: 'ok' }))
   on('command.run', () => ({ text: '' }))
+  on('turn.complete', () => ({ text: '' }))
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  return clock
 }
 
 function clawd($: Engine, args: string) {
@@ -77,4 +79,34 @@ test('/clawd switches theme, and rejects unknown arguments', async ($, on) => {
   expect((await clawd($, 'classic')).text).toMatch(/Classic/)
   expect((await clawd($, 'purple')).text).toMatch(/Usage/)
   expect((await clawd($, 'lantern')).text).toMatch(/Green Lantern/)
+})
+
+test("a subagent's turn ending does not wrap Clawd up mid-turn", async ($, on) => {
+  await start($, on)
+  await $.tool.call({ tool: 'Edit', file_path: '/tmp/a.txt', old_string: 'a', new_string: 'b' })
+  await $.turn.complete({ reason: 'answer', answer: '', durationMs: 1, isAborted: false, turnId: 't1', agentId: 'sub-1' })
+  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  expect((await ui.find({ key: 'clawd-state' }))?.text).toMatch(/BUILDING/)
+  await ui.unmount()
+})
+
+test('no frame timer runs until the band is drawn', async ($, on) => {
+  let everies = 0
+  on('clock.every', () => { everies++; return { value: undefined } })
+  on('clock.after', () => ({ value: undefined }))
+  await start($, on, { clock: false })
+  expect(everies).toBe(0)
+  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  expect(everies).toBe(1)
+  await ui.unmount()
+})
+
+test('frames are pushed to the band on the timer', async ($, on) => {
+  let blits = 0
+  on('ui.blit', () => { blits++; return { value: {} } })
+  const clock = await start($, on)
+  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  await clock?.advance(500)
+  expect(blits).toBeGreaterThan(0)
+  await ui.unmount()
 })

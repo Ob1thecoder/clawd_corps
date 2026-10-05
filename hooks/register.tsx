@@ -21,6 +21,7 @@ let enabled = true
 let turn = 0
 let askedId: string | null = null
 let frameTimer: Timer | null = null
+let framesOn = false
 let idleTimer: Timer | null = null
 
 function send($: EngineInterface, ev: StoryEvent): void {
@@ -36,7 +37,14 @@ async function onFrame($: EngineInterface): Promise<void> {
   if (!bandId || !enabled) return
   tick(m)
   const r = await $.ui.blit({ requestId: bandId, key: 'clawd', cells: encodeCells(render(m, THEMES[theme])) })
-  if (r.deny) bandId = null
+  if (r.deny) stopFrames()
+}
+
+function stopFrames(): void {
+  bandId = null
+  framesOn = false
+  frameTimer?.cancel()
+  frameTimer = null
 }
 
 function wordState(): WordState {
@@ -55,8 +63,6 @@ export const register: Register = on => {
       send($, 'start')
       poke($)
     }
-    frameTimer?.cancel()
-    frameTimer = $.clock.every(FRAME_MS, () => { void onFrame($) })
     return r
   })
 
@@ -101,6 +107,7 @@ export const register: Register = on => {
   })
 
   on('turn.complete', async ($, e, next) => {
+    if (e.agentId !== undefined) return next(e)
     askedId = null
     send($, e.reason === 'aborted' ? 'esc' : 'turnend')
     poke($)
@@ -111,10 +118,14 @@ export const register: Register = on => {
     enabled = await read($, enabledAtom)
     theme = await read($, themeAtom)
     if (!enabled || e.surface !== 'terminal' || e.props.hasSurvey || e.props.bodyColumns < COLUMNS || e.props.maxRows < ROWS) {
-      bandId = null
+      stopFrames()
       return next(e)
     }
     bandId = e.requestId
+    if (!framesOn) {
+      framesOn = true
+      frameTimer = $.clock.every(FRAME_MS, () => { onFrame($).catch(stopFrames) })
+    }
     const { Box, Raster, Text } = $.ui.resolve(e)
     const cells = encodeCells(render(m, THEMES[theme]))
     return (
