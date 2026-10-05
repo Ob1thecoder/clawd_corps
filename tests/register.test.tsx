@@ -327,3 +327,27 @@ test('clicking a lantern in the picker switches this session and closes the pane
   await band.unmount()
   expect((await bodyColors($)).has(hexColor(THEMES.red.floor))).toBe(true)
 })
+
+// ---- name tag and the coloured line over the prompt ----
+
+test('a lantern wears a name tag and a line in its colour above the prompt', async ($, on) => {
+  await start($, on)
+  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND(80, 12) })
+  expect((await ui.find({ key: 'clawd-tag' }))?.text).toMatch(/◆ GREEN LANTERN/)
+  const line = await ui.find({ key: 'clawd-line' })
+  expect(line?.text).toMatch(/^─+$/)
+  expect(JSON.stringify(line?.children)).toContain(THEMES.lantern.ring.line)
+  await ui.unmount()
+})
+
+test('no spare row, no line; and orange Clawd has no tag or line', async ($, on) => {
+  await start($, on)
+  const tight = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND(80, 10) })
+  expect(await tight.find({ key: 'clawd-line' })).toBeUndefined()
+  await tight.unmount()
+  await clawd($, 'classic')
+  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND(80, 12) })
+  expect(await ui.find({ key: 'clawd-tag' })).toBeUndefined()
+  expect(await ui.find({ key: 'clawd-line' })).toBeUndefined()
+  await ui.unmount()
+})

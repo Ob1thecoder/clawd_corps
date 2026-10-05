@@ -290,9 +290,12 @@ export const register: Register = on => {
     const { Box, Button, Raster, Text } = $.ui.resolve(e)
     const size = SIZE[t]
     const room = e.props.bodyColumns - size.columns
-    const keys = room >= SIDE_COLUMNS && t !== 'mini'
+    const keys = room >= SIDE_COLUMNS && t === 'full'          // state, tag and five buttons fit beside full-size Clawd only
+    const corps = THEMES[theme].style === 'lantern' ? THEMES[theme] : null
+    const line = corps !== null && e.props.maxRows > size.rows   // a spare row: draw the colour line over the prompt
     const keyLabels: Record<Action, string> = { p: m.state === 'building' ? 'whip' : m.state === 'doze' ? 'wake' : 'poke', r: 'ring', w: m.state === 'planning' ? 'peek' : 'whack', h: 'hide', c: 'corps' }
     return (
+      <Box flexDirection="column">
       <Box flexDirection="row">
         <Box key="clawd-stage" width={size.columns} height={size.rows}>
           <Raster key="clawd" columns={size.columns} rows={size.rows} cells={(lastCells = frameCells(t))} />
@@ -305,11 +308,25 @@ export const register: Register = on => {
                 {label()}
               </Text>
             </Box>
+            {corps && (
+              <Box key="clawd-tag">
+                <Text color={corps.ring.text} bold>
+                  {'  ◆ '}
+                  {corpsLabel(theme, corpsN)}
+                </Text>
+              </Box>
+            )}
             {keys && (['p', 'r', 'w', 'c', 'h'] as const).map(a => (
               <Button key={`clawd-key-${a}`} label={keyLabels[a]} hotkey={a} plain onPress={() => { void act($, a) }} />
             ))}
           </Box>
         )}
+      </Box>
+      {line && corps && (
+        <Box key="clawd-line">
+          <Text color={corps.ring.line}>{'─'.repeat(e.props.bodyColumns)}</Text>
+        </Box>
+      )}
       </Box>
     )
   })
