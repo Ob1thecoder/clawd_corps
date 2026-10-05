@@ -17,8 +17,14 @@ export function px(g: Grid, x: number, y: number, c: Color | null | undefined): 
   if (c && row && rx >= 0 && rx < W) row[rx] = c
 }
 
-export function rect(g: Grid, x: number, y: number, w: number, h: number, c: Color): void {
-  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) px(g, x + i, y + j, c)
+// A null colour clears the pixels instead of painting them.
+export function rect(g: Grid, x: number, y: number, w: number, h: number, c: Color | null): void {
+  for (let j = 0; j < h; j++) {
+    for (let i = 0; i < w; i++) {
+      if (c) px(g, x + i, y + j, c)
+      else { const row = g[Math.round(y + j)]; const cx = Math.round(x + i); if (row && cx >= 0 && cx < W) row[cx] = null }
+    }
+  }
 }
 
 export function line(g: Grid, x0: number, y0: number, x1: number, y1: number, c: Color): void {

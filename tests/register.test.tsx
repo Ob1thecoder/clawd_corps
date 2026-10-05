@@ -234,7 +234,8 @@ test('a calm Clawd sends few frames: identical frames are skipped and the pace h
   await clock?.advance(3000)                 // the hop-in finishes; Clawd is idle
   blits = 0
   await clock?.advance(2000)
-  expect(blits).toBeLessThanOrEqual(4)
+  // idle bobs its arms about once a second (user: a still Clawd looked frozen): a third of the 24 frames full pace would send
+  expect(blits).toBeLessThanOrEqual(8)
   await ui.unmount()
 })
 

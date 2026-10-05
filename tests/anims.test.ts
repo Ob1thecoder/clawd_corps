@@ -137,3 +137,20 @@ test('power down ends orange with no badge', () => {
   expect(has(last, C.badgeW)).toBe(false)
   expect(has(last, THEMES.classic.body)).toBe(true)
 })
+
+test('idle never holds still for long: something moves at least every 4 frames', () => {
+  for (const theme of [THEMES.classic, THEMES.lantern]) {
+    const frames = Array.from({ length: A.idle.n * 2 }, (_, i) => {
+      const g = grid()
+      A.idle.draw(g, i, PROPS[0]!, theme)
+      return JSON.stringify(g)
+    })
+    let run = 1
+    let longest = 1
+    for (let i = 1; i < frames.length; i++) {
+      run = frames[i] === frames[i - 1] ? run + 1 : 1
+      longest = Math.max(longest, run)
+    }
+    expect(longest).toBeLessThanOrEqual(4)
+  }
+})

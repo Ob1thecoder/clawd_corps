@@ -3,7 +3,7 @@ import {
   type Eyes, FLOAT, type Feet, HAND, LNX, NX, type Point, STROKES, drawArm, drawBeam, drawClawd, drawClipboard,
   drawConstruct, drawEmblemGlow, drawHammer, drawHat, drawNail, drawPencil, drawPlank, drawRingFist, drawSign, floor,
   halo, hammerPixels, impactPivot, lanternImpactPivot, nailHeadY, pencilBehindEar, shoulder, sparks, sparksAt,
-  thumbsUp, under, drawHeart, drawWhip,
+  thumbsUp, under, drawHeart, drawWhip, armsUp,
 } from './props'
 import { C, type Paint, THEMES } from './themes'
 
@@ -172,9 +172,10 @@ export const A = {
     rect(g, 39, up ? 4 : 6, 2, 2, p.body)
   }),
 
-  idle: loop('idle: blink, glance', 24, (g, i, _props, p) => {
+  idle: loop('idle: blink, glance, little arm bobs', 24, (g, i, _props, p) => {
     const eyes: Eyes = i === 14 || i === 15 ? 'closed' : i >= 18 && i <= 21 ? 'right' : 'open'
     drawClawd(g, p, { eyes })
+    if (i % 6 === 3 || i % 6 === 4) armsUp(g, p)      // a small bob about once a second, so idle never looks frozen
   }),
 
   dozeIn: once('sits down, eyes droop', 6, (g, i, _props, p) => {

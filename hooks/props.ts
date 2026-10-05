@@ -398,3 +398,11 @@ export function drawSweat(g: Grid, t: number, dy = 0): void {
 export function drawSpeedLines(g: Grid, t: number): void {
   ;[12, 14, 16].forEach((y, j) => { for (let x = 0; x < 2 + ((j + t) % 3); x++) under(g, x, y, C.speed) })
 }
+
+// Clawd's little side arms (the outer ends of its body row) lifted two pixels: a small idle wave.
+export function armsUp(g: Grid, p: Paint, dy = 0): void {
+  for (const x of [CX + 2, CX + 32]) {
+    rect(g, x, CY + 4 + dy, 2, 2, null)
+    rect(g, x, CY + 2 + dy, 2, 2, p.body)
+  }
+}
