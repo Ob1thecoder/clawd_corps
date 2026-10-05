@@ -157,25 +157,6 @@ test('the band picks full, compact or mini by its room, else yields to the statu
   expect(await rasterSize($, 12, 2)).toBe(null)
 })
 
-test('a click on Clawd while hammering cracks the whip: double speed', async ($, on) => {
-  await start($, on)
-  await $.tool.call({ tool: 'Edit', file_path: '/tmp/a.txt', old_string: 'a', new_string: 'b' })
-  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
-  await ui.post({ t: 'down', x: 20, y: 6 }, { in: 'clawd-hit' })
-  expect((await ui.find({ key: 'clawd-state' }))?.text).toMatch(/BUILDING ×2/)
-  await ui.unmount()
-})
-
-test('a click on the ring transforms orange Clawd into a Green Lantern', async ($, on) => {
-  on('ui.blit', () => ({ value: {} }))
-  const clock = await start($, on)
-  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
-  await ui.post({ t: 'down', x: 54, y: 0 }, { in: 'clawd-hit' })
-  await clock?.advance(40 * 125)          // let the hop-in and the 20-frame suit-up play out
-  await ui.unmount()
-  expect((await bodyColors($)).has(0x123a22)).toBe(true)
-})
-
 test('the hide hotkey button turns Clawd off', async ($, on) => {
   await start($, on)
   const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
@@ -203,17 +184,6 @@ test('a frame refused from before a resize does not stop the new animation', asy
   expect(blits).toBeGreaterThan(2)
   await compact.unmount()
   await full.unmount()
-})
-
-test('a click is not lost to a pointer move in the same frame', async ($, on) => {
-  await start($, on)
-  await $.tool.call({ tool: 'Edit', file_path: '/tmp/a.txt', old_string: 'a', new_string: 'b' })
-  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
-  void ui.pointer({ type: 'down', x: 20, y: 6, button: 'left', in: 'clawd-hit' })
-  await ui.pointer({ type: 'move', x: 21, y: 6, in: 'clawd-hit' })
-  await ui.advance(125)
-  expect((await ui.find({ key: 'clawd-state' }))?.text).toMatch(/BUILDING ×2/)
-  await ui.unmount()
 })
 
 test('frames come at 12 a second', async ($, on) => {
@@ -250,4 +220,31 @@ test('while working, frames still come at full pace', async ($, on) => {
   await clock?.advance(1000)
   expect(blits).toBeGreaterThanOrEqual(11)
   await ui.unmount()
+})
+
+test('the band has no click overlay: it made the terminal repaint Clawd only now and then', async ($, on) => {
+  await start($, on)
+  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  expect(await ui.find({ key: 'clawd-hit' })).toBeUndefined()
+  expect(await ui.find({ key: 'clawd' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('the p hotkey while hammering cracks the whip: double speed', async ($, on) => {
+  await start($, on)
+  await $.tool.call({ tool: 'Edit', file_path: '/tmp/a.txt', old_string: 'a', new_string: 'b' })
+  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  await ui.press({ key: 'clawd-key-p' })
+  expect((await ui.find({ key: 'clawd-state' }))?.text).toMatch(/BUILDING ×2/)
+  await ui.unmount()
+})
+
+test('the r hotkey transforms orange Clawd into a Green Lantern', async ($, on) => {
+  on('ui.blit', () => ({ value: {} }))
+  const clock = await start($, on)
+  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  await ui.press({ key: 'clawd-key-r' })
+  await clock?.advance(40 * 125)
+  await ui.unmount()
+  expect((await bodyColors($)).has(0x123a22)).toBe(true)
 })

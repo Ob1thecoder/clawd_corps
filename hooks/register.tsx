@@ -2,7 +2,6 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { ClawdThemeName } from '../types'
-import { type Action, actionFor, cellToPixel, regionAt } from './hits'
 import { type StoryEvent, createMachine, current, fire, peek, render, tick, whack } from './machine'
 import { COLUMNS, ROWS, encodeCells } from './raster'
 import { type Tier, miniCells, miniProp, pickTier, shrink } from './sizes'
@@ -10,6 +9,9 @@ import { THEMES, type ThemeName, type WordState, isThemeName } from './themes'
 
 const FRAME_MS = 83                // about 12 frames a second
 const IDLE_MS = 120_000
+// One action per hotkey button: p poke/whip/wake, r ring, w whack/peek, h hide.
+type Action = 'p' | 'r' | 'w' | 'h'
+
 const SIDE_COLUMNS = 14           // room beside Clawd for the state label and the hotkey buttons
 const SIZE: Record<Exclude<Tier, 'status'>, { columns: number; rows: number }> = {
   full: { columns: COLUMNS, rows: ROWS }, compact: { columns: COLUMNS / 2, rows: ROWS / 2 }, mini: { columns: 9, rows: 3 },
@@ -34,7 +36,6 @@ let statusShown = false
 let frameGen = 0                 // bumped whenever the frame timer starts or stops; stale frames check it
 let lastCells = ''               // the cells last sent; an identical frame isn't sent again
 let calmSkip = false             // calm loops advance on every other timer tick
-let seenDowns = 0                // clicks already handled from the overlay's running count
 let idleTimer: Timer | null = null
 
 function send($: EngineInterface, ev: StoryEvent): void {
@@ -206,7 +207,7 @@ export const register: Register = on => {
       const gen = ++frameGen
       frameTimer = $.clock.every(FRAME_MS, () => { onFrame($, gen).catch(() => { if (gen === frameGen) stopFrames() }) })
     }
-    const { Box, Button, Client, Raster, Text } = $.ui.resolve(e)
+    const { Box, Button, Raster, Text } = $.ui.resolve(e)
     const size = SIZE[t]
     const room = e.props.bodyColumns - size.columns
     const keys = room >= SIDE_COLUMNS && t !== 'mini'
@@ -215,9 +216,6 @@ export const register: Register = on => {
       <Box flexDirection="row">
         <Box key="clawd-stage" width={size.columns} height={size.rows}>
           <Raster key="clawd" columns={size.columns} rows={size.rows} cells={(lastCells = frameCells(t))} />
-          <Box key="clawd-hit-layer" position="absolute" top={0} left={0}>
-            <Client key="clawd-hit" module="./hit.tsx" props={size} width={size.columns} height={size.rows} />
-          </Box>
         </Box>
         {room >= (t === 'mini' ? 7 : SIDE_COLUMNS) && (
           <Box key="clawd-side" flexDirection="column">
@@ -234,23 +232,6 @@ export const register: Register = on => {
         )}
       </Box>
     )
-  })
-
-  // Clicks from the overlay over Clawd (fullscreen layout only).
-  on('ui.message', async ($, e, next) => {
-    if (e.element !== 'clawd-hit') return next(e)
-    const d = (e.data ?? {}) as { t?: string; x?: number; y?: number; downs?: number; dx?: number; dy?: number }
-    // A click: newly counted by the overlay's running total, or a bare 'down'.
-    let click: [number, number] | null = null
-    if (typeof d.downs === 'number' && typeof d.dx === 'number' && typeof d.dy === 'number') {
-      if (d.downs < seenDowns) seenDowns = 0            // a fresh overlay instance counts from zero
-      if (d.downs > seenDowns) { seenDowns = d.downs; click = [d.dx, d.dy] }
-    } else if (d.t === 'down' && typeof d.x === 'number' && typeof d.y === 'number') click = [d.x, d.y]
-    if (!click) return {}
-    const [px, py] = cellToPixel(tier, click[0], click[1])
-    const region = regionAt(m.state, THEMES[theme].style, px, py)
-    if (region) await act($, actionFor(region))
-    return {}
   })
 
   on('ui.render', { component: 'Spinner' }, async ($, e, next) => {
