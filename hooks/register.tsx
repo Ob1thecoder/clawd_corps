@@ -2,10 +2,12 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { ClawdThemeName } from '../types'
+import { A } from './anims'
+import { type Claims, REFRESH_MS, claimFor, label as corpsLabel, prune } from './claims'
 import { type StoryEvent, createMachine, current, fire, peek, render, tick, whack } from './machine'
 import { COLUMNS, ROWS, encodeCells } from './raster'
 import { type Tier, miniCells, miniProp, pickTier, shrink } from './sizes'
-import { THEMES, type ThemeName, type WordState, isThemeName } from './themes'
+import { type Paint, THEMES, type ThemeName, type WordState, corpsOf } from './themes'
 
 const FRAME_MS = 83                // about 12 frames a second
 const IDLE_MS = 120_000
@@ -35,7 +37,12 @@ let frameCount = 0
 let statusShown = false
 let frameGen = 0                 // bumped whenever the frame timer starts or stops; stale frames check it
 let lastCells = ''               // the cells last sent; an identical frame isn't sent again
-let calmSkip = false             // calm loops advance on every other timer tick
+let calmSkip = false
+let lastCorps: ThemeName = 'lantern'   // the corps the ring hotkey goes back to
+let sessionId = ''               // this session's id, the key of its colour claim
+let corpsN = 1                   // 2, 3... when every colour is taken and this one is shared
+let fromTheme: ThemeName = 'lantern'   // the corps being left while powering down
+let refreshTimer: Timer | null = null             // calm loops advance on every other timer tick
 let idleTimer: Timer | null = null
 
 function send($: EngineInterface, ev: StoryEvent): void {
@@ -56,8 +63,41 @@ function clearStatus($: EngineInterface): void {
   statusShown = false
 }
 
+// Hopping in, a lantern is still orange; powering down, it recolours from the corps it is leaving.
+function paintNow(): Paint {
+  const a = current(m)
+  if (a === A.enter && THEMES[theme].style === 'lantern') return THEMES.classic
+  if (a === A.powerDown) return { ...THEMES.classic, from: THEMES[fromTheme] }
+  return THEMES[theme]
+}
+
+function asClaims(v: unknown): Claims {
+  return v && typeof v === 'object' ? (v as Claims) : {}
+}
+
+// Records (or refreshes) this session's colour in the shared claims, dropping claims from sessions that are gone.
+async function writeClaim($: EngineInterface, name: ThemeName | null): Promise<void> {
+  if (!sessionId) return
+  const now = await $.clock.now()
+  const claims = prune(asClaims(await $.store.get('claims')), now)
+  const mine = name === null ? claimFor(claims, sessionId, now) : { theme: name, n: 1, at: now }
+  if (name !== null) {
+    const same = Object.entries(claims).filter(([id, c]) => id !== sessionId && c.theme === name)
+    mine.n = same.length ? Math.max(...same.map(([, c]) => c.n)) + 1 : 1
+  }
+  claims[sessionId] = mine
+  await $.store.set('claims', claims)
+  corpsN = mine.n
+  if (mine.theme !== theme) { theme = mine.theme; await update($, themeAtom, () => mine.theme) }
+}
+
+function keepClaim($: EngineInterface): void {
+  refreshTimer?.cancel()
+  refreshTimer = $.clock.after(REFRESH_MS, () => { void writeClaim($, theme).then(() => keepClaim($)) })
+}
+
 function frameCells(t: Tier): string {
-  const paint = THEMES[theme]
+  const paint = paintNow()
   if (t === 'mini') return miniCells(m.state, paint, frameCount)
   const g = render(m, paint)
   return encodeCells(t === 'compact' ? shrink(g) : g)
@@ -69,17 +109,22 @@ function label(): string {
   return `${prop}${word}${m.boost > 0 && m.state === 'building' ? ' ×2' : ''}`
 }
 
+// Switches this session's corps (or back to classic): its claim follows, and Clawd transforms.
 async function setTheme($: EngineInterface, name: ThemeName): Promise<void> {
-  const before = await read($, themeAtom)
+  const before = theme
+  if (THEMES[before].style === 'lantern') lastCorps = before
+  theme = name
   await update($, themeAtom, () => name)
-  await $.store.set('theme', name)
-  if (name !== before && (await read($, enabledAtom))) send($, name === 'lantern' ? 'suitup' : 'powerdown')
+  await writeClaim($, name)
+  if (name === before || !(await read($, enabledAtom))) return
+  if (THEMES[name].style === 'lantern') send($, 'suitup')
+  else { fromTheme = before; send($, 'powerdown') }
 }
 
 // One action, from a click or its hotkey button.
 async function act($: EngineInterface, a: Action): Promise<void> {
   if (a === 'p') send($, m.state === 'doze' ? 'typing' : m.state === 'building' ? 'whip' : 'poke')
-  if (a === 'r') await setTheme($, theme === 'lantern' ? 'classic' : 'lantern')
+  if (a === 'r') await setTheme($, THEMES[theme].style === 'lantern' ? 'classic' : lastCorps)
   if (a === 'w' && (whack(m) || peek(m))) $.ui.invalidate('ui.render')
   if (a === 'h') {
     await update($, enabledAtom, () => false)
@@ -124,15 +169,27 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const r = await next(e)
     await $.command.register({ name: 'clawd', description: 'Clawd above the prompt: /clawd [on|off|lantern|classic]' })
-    const savedTheme = await $.store.get('theme')
     const savedEnabled = await $.store.get('enabled')
-    if (typeof savedTheme === 'string' && isThemeName(savedTheme)) await update($, themeAtom, () => savedTheme)
     if (typeof savedEnabled === 'boolean') await update($, enabledAtom, () => savedEnabled)
+    // Each session wears its own colour: the first corps no other open session holds.
+    sessionId = await $.session.id()
+    await writeClaim($, null)
+    keepClaim($)
     if (e.isInteractive && e.surface === 'terminal') {
-      send($, 'start')
+      send($, THEMES[theme].style === 'lantern' ? 'startSuited' : 'start')
       poke($)
     }
     return r
+  })
+
+  on('session.end', async ($, e, next) => {
+    refreshTimer?.cancel()
+    if (sessionId) {
+      const claims = asClaims(await $.store.get('claims'))
+      delete claims[sessionId]
+      await $.store.set('claims', claims)
+    }
+    return next(e)
   })
 
   on('prompt.submit', async ($, e, next) => {
@@ -243,11 +300,12 @@ export const register: Register = on => {
 
   on('command.run', { command: 'clawd' }, async ($, e) => {
     const arg = e.args.trim().toLowerCase()
-    if (isThemeName(arg)) {
-      await setTheme($, arg)
-      return { text: `Clawd theme: ${THEMES[arg].title}.` }
+    const name = corpsOf(arg)
+    if (name) {
+      await setTheme($, name)
+      return { text: `Clawd theme: ${THEMES[name].title}.` }
     }
-    if (arg !== '' && arg !== 'on' && arg !== 'off') return { text: 'Usage: /clawd [on|off|lantern|classic]' }
+    if (arg !== '' && arg !== 'on' && arg !== 'off') return { text: 'Usage: /clawd [on|off|corps|green|blue|red|yellow|violet|white|black|classic]' }
     const turnOn = arg === '' ? !(await read($, enabledAtom)) : arg === 'on'
     await update($, enabledAtom, () => turnOn)
     await $.store.set('enabled', turnOn)

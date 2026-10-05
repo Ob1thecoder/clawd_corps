@@ -7,7 +7,7 @@ import { type Grid, grid } from './pixels'
 export type StoryEvent =
   | 'start' | 'prompt' | 'planmode' | 'planshown' | 'approve' | 'reject' | 'edit'
   | 'error' | 'permask' | 'permok' | 'turnend' | 'esc' | 'idle2m' | 'typing'
-  | 'suitup' | 'powerdown' | 'poke' | 'whip'
+  | 'suitup' | 'powerdown' | 'poke' | 'whip' | 'startSuited'
 
 export type Machine = {
   state: LoopState
@@ -41,6 +41,8 @@ function plan(m: Machine, ev: StoryEvent): Plan | null {
   switch (ev) {
     case 'start':
       return { seq: [A.enter], to: 'idle', set: { hat: false, clip: false, prev: null } }
+    case 'startSuited':      // a lantern hops in orange, then suits up into its corps
+      return { seq: [A.enter, A.suitUp], to: 'idle', set: { hat: false, clip: false, prev: null } }
     case 'prompt':
       if (s === 'idle') return { seq: [A.perk], to: 'thinking', set: {} }
       if (s === 'doze') return { seq: [A.wake, A.perk], to: 'thinking', set: {} }

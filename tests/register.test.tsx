@@ -2,7 +2,8 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 
-import { decodeCells } from '../hooks/raster'
+import { decodeCells, hexColor } from '../hooks/raster'
+import { THEMES } from '../hooks/themes'
 
 const BAND = (bodyColumns = 80, maxRows = 12) =>
   ({
@@ -10,10 +11,11 @@ const BAND = (bodyColumns = 80, maxRows = 12) =>
     props: { hasSurvey: false, isWorking: false, maxRows, bodyColumns, scroll: { offset: 0, bodyRows: maxRows }, view: {} },
   }) as const
 
-async function start($: Engine, on: On, opts: { clock?: boolean } = {}) {
+async function start($: Engine, on: On, opts: { clock?: boolean; store?: Record<string, unknown> } = {}) {
   on('session.start', () => ({ cwd: '/' }))
   on('command.register', () => ({ value: { command: 'clawd' } }))
-  mock.store(on)
+  on('session.id', () => ({ value: 'this-session' }))
+  mock.store(on, opts.store)
   const clock = opts.clock === false ? null : mock.clock(on)
   on('ui.render', ($e, e) => {
     const { Box } = $e.ui.resolve(e)
@@ -239,12 +241,42 @@ test('the p hotkey while hammering cracks the whip: double speed', async ($, on)
   await ui.unmount()
 })
 
-test('the r hotkey transforms orange Clawd into a Green Lantern', async ($, on) => {
+test('the r hotkey takes a lantern back to orange Clawd', async ($, on) => {
   on('ui.blit', () => ({ value: {} }))
   const clock = await start($, on)
   const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  await clock?.advance(5000)                 // hop in, then suit up into Green (the first free colour)
   await ui.press({ key: 'clawd-key-r' })
-  await clock?.advance(40 * 125)
+  await clock?.advance(3000)
+  await ui.unmount()
+  expect((await bodyColors($)).has(0x3a2c25)).toBe(true)
+})
+
+test('a lone session hops in orange, then suits up into Green Lantern', async ($, on) => {
+  on('ui.blit', () => ({ value: {} }))
+  const clock = await start($, on)
+  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  await clock?.advance(5000)
   await ui.unmount()
   expect((await bodyColors($)).has(0x123a22)).toBe(true)
+})
+
+test('a second session takes the next free colour: Blue', async ($, on) => {
+  on('ui.blit', () => ({ value: {} }))
+  const clock = await start($, on, { store: { claims: { other: { theme: 'lantern', n: 1, at: 0 } } } })
+  const ui = await $.ui.mount({ plugin: 'clawd', surface: 'terminal', ...BAND() })
+  await clock?.advance(5000)
+  await ui.unmount()
+  const colors = await bodyColors($)
+  expect(colors.has(hexColor(THEMES.blue.floor))).toBe(true)
+  expect(colors.has(hexColor(THEMES.lantern.floor))).toBe(false)
+})
+
+test('/clawd red switches only this session, by name', async ($, on) => {
+  on('ui.blit', () => ({ value: {} }))
+  const clock = await start($, on)
+  expect((await clawd($, 'red')).text).toMatch(/Red Lantern/)
+  expect((await clawd($, 'green')).text).toMatch(/Green Lantern/)
+  expect((await clawd($, 'purple')).text).toMatch(/Usage/)
+  await clock?.advance(10)
 })
