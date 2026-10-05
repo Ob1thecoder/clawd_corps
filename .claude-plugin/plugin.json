@@ -1,0 +1,6 @@
+{
+  "name": "clawd",
+  "version": "0.1.0",
+  "description": "Animated Clawd above the prompt that acts out what Claude is doing",
+  "types": "./types/index.d.ts"
+}
