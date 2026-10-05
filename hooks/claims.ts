@@ -32,6 +32,18 @@ export function claimFor(claims: Claims, self: string, now: number): Claim {
   return { theme: best, n, at: now }
 }
 
+// This session wearing a colour it chose (or refreshing it): it keeps its own number while no other live
+// session has taken that number, else it takes the smallest number free for that colour.
+export function claimAs(claims: Claims, self: string, theme: ThemeName, now: number): Claim {
+  const live = prune(claims, now)
+  const taken = new Set(Object.entries(live).filter(([id, c]) => id !== self && c.theme === theme).map(([, c]) => c.n))
+  const mine = live[self]
+  if (mine && mine.theme === theme && !taken.has(mine.n)) return { theme, n: mine.n, at: now }
+  let n = 1
+  while (taken.has(n)) n++
+  return { theme, n, at: now }
+}
+
 export function label(theme: ThemeName, n: number): string {
   return THEMES[theme].title.toUpperCase() + (n > 1 ? ` ${n}` : '')
 }

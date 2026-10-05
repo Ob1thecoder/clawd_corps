@@ -11,11 +11,13 @@ const BAND = (bodyColumns = 80, maxRows = 12) =>
     props: { hasSurvey: false, isWorking: false, maxRows, bodyColumns, scroll: { offset: 0, bodyRows: maxRows }, view: {} },
   }) as const
 
-async function start($: Engine, on: On, opts: { clock?: boolean; store?: Record<string, unknown> } = {}) {
+let sessionIdNow = 'this-session'   // what $.session.id() answers; a test can change it (a /clear)
+
+async function start($: Engine, on: On, opts: { clock?: boolean; store?: Record<string, unknown> | false; interactive?: boolean } = {}) {
   on('session.start', () => ({ cwd: '/' }))
   on('command.register', () => ({ value: { command: 'clawd' } }))
-  on('session.id', () => ({ value: 'this-session' }))
-  mock.store(on, opts.store)
+  on('session.id', () => ({ value: sessionIdNow }))
+  if (opts.store !== false) mock.store(on, opts.store)
   const clock = opts.clock === false ? null : mock.clock(on)
   on('ui.render', ($e, e) => {
     const { Box } = $e.ui.resolve(e)
@@ -24,7 +26,7 @@ async function start($: Engine, on: On, opts: { clock?: boolean; store?: Record<
   on('tool.call', () => ({ result: 'ok' }))
   on('command.run', () => ({ text: '' }))
   on('turn.complete', () => ({ text: '' }))
-  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: opts.interactive ?? true })
   return clock
 }
 
@@ -350,4 +352,39 @@ test('no spare row, no line; and orange Clawd has no tag or line', async ($, on)
   expect(await ui.find({ key: 'clawd-tag' })).toBeUndefined()
   expect(await ui.find({ key: 'clawd-line' })).toBeUndefined()
   await ui.unmount()
+})
+
+// A store the test can see into: every write is recorded.
+function seeStore(on: On) {
+  const data = new Map<string, unknown>()
+  on('store.get', (_$, e) => ({ value: data.get((e as { key: string }).key) }))
+  on('store.set', (_$, e) => { const { key, value } = e as { key: string; value: unknown }; data.set(key, value); return { value: undefined } })
+  return data
+}
+
+test('after /clear the session re-claims its colour under its new id', async ($, on) => {
+  const data = seeStore(on)
+  on('session.end', (_$, e) => ({ sessionId: (e as { sessionId: string }).sessionId }))
+  sessionIdNow = 'before-clear'
+  await start($, on, { store: false })
+  sessionIdNow = 'after-clear'
+  await $.session.end({ reason: 'clear', sessionId: 'before-clear', resume: {} } as never)
+  sessionIdNow = 'this-session'
+  const claims = data.get('claims') as Record<string, { theme: string }>
+  expect(Object.keys(claims)).toEqual(['after-clear'])
+  expect(claims['after-clear']?.theme).toBe('lantern')
+})
+
+test('a non-interactive run (claude -p) claims no colour', async ($, on) => {
+  const data = seeStore(on)
+  await start($, on, { store: false, interactive: false })
+  expect(data.get('claims')).toBeUndefined()
+})
+
+test('the picker opens focused and closes on Escape, so its number keys work', async ($, on) => {
+  const opened: unknown[] = []
+  on('ui.open', (_$, e) => { opened.push(e); return { value: { isPlaced: true } } })
+  await start($, on)
+  await clawd($, 'corps')
+  expect(opened[0]).toMatchObject({ id: 'clawd-corps', focus: true, closeOnEscape: true })
 })

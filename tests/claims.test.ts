@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { STALE_MS, type Claims, claimFor, label, prune } from '../hooks/claims'
+import { STALE_MS, type Claims, claimAs, claimFor, label, prune } from '../hooks/claims'
 
 const at = 1_000_000
 
@@ -31,4 +31,14 @@ test('with all seven taken, the least-used colour comes back numbered', () => {
   expect(c).toEqual({ theme: 'lantern', n: 2, at })
   expect(label(c.theme, c.n)).toBe('GREEN LANTERN 2')
   expect(label('blue', 1)).toBe('BLUE LANTERN')
+})
+
+test('a shared colour keeps its number across refreshes', () => {
+  const first = claimAs({ a: { theme: 'blue', n: 1, at } }, 'me', 'blue', at)
+  expect(first.n).toBe(2)
+  const again = claimAs({ a: { theme: 'blue', n: 1, at }, me: first }, 'me', 'blue', at + 60_000)
+  expect(again.n).toBe(2)
+  const third = claimAs({ a: { theme: 'blue', n: 1, at }, me: again }, 'me', 'blue', at + 120_000)
+  expect(third.n).toBe(2)
+  expect(claimAs({ a: { theme: 'blue', n: 1, at } }, 'me', 'red', at).n).toBe(1)
 })

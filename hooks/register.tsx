@@ -3,7 +3,7 @@ import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { ClawdThemeName } from '../types'
 import { A } from './anims'
-import { type Claims, REFRESH_MS, claimFor, label as corpsLabel, prune } from './claims'
+import { type Claims, REFRESH_MS, claimAs, claimFor, label as corpsLabel, prune } from './claims'
 import { type StoryEvent, createMachine, current, fire, peek, render, tick, whack } from './machine'
 import { COLUMNS, ROWS, encodeCells } from './raster'
 import type { Grid } from './pixels'
@@ -84,11 +84,7 @@ async function writeClaim($: EngineInterface, name: ThemeName | null): Promise<v
   if (!sessionId) return
   const now = await $.clock.now()
   const claims = prune(asClaims(await $.store.get('claims')), now)
-  const mine = name === null ? claimFor(claims, sessionId, now) : { theme: name, n: 1, at: now }
-  if (name !== null) {
-    const same = Object.entries(claims).filter(([id, c]) => id !== sessionId && c.theme === name)
-    mine.n = same.length ? Math.max(...same.map(([, c]) => c.n)) + 1 : 1
-  }
+  const mine = name === null ? claimFor(claims, sessionId, now) : claimAs(claims, sessionId, name, now)
   claims[sessionId] = mine
   await $.store.set('claims', claims)
   corpsN = mine.n
@@ -114,7 +110,7 @@ function label(): string {
 }
 
 async function openPicker($: EngineInterface): Promise<void> {
-  await $.ui.open({ id: PICKER, title: 'Choose your corps' })
+  await $.ui.open({ id: PICKER, title: 'Choose your corps', focus: true, closeOnEscape: true })
 }
 
 async function pick($: EngineInterface, name: ThemeName): Promise<void> {
@@ -194,10 +190,13 @@ export const register: Register = on => {
     await $.command.register({ name: 'clawd', description: 'Clawd above the prompt: /clawd [on|off|lantern|classic]' })
     const savedEnabled = await $.store.get('enabled')
     if (typeof savedEnabled === 'boolean') await update($, enabledAtom, () => savedEnabled)
-    // Each session wears its own colour: the first corps no other open session holds.
-    sessionId = await $.session.id()
-    await writeClaim($, null)
-    keepClaim($)
+    // Each interactive session wears its own colour: the first corps no other open session holds.
+    // A `claude -p` or SDK run draws no Clawd, so it claims nothing.
+    if (e.isInteractive && e.surface === 'terminal') {
+      sessionId = await $.session.id()
+      await writeClaim($, null)
+      keepClaim($)
+    }
     if (e.isInteractive && e.surface === 'terminal') {
       send($, THEMES[theme].style === 'lantern' ? 'startSuited' : 'start')
       poke($)
@@ -212,7 +211,15 @@ export const register: Register = on => {
       delete claims[sessionId]
       await $.store.set('claims', claims)
     }
-    return next(e)
+    const r = await next(e)
+    // After a /clear or a resume the process goes on under a new session id, with no session.start:
+    // keep wearing the same colour under that id.
+    if (sessionId && (e.reason === 'clear' || e.reason === 'resume')) {
+      sessionId = await $.session.id()
+      await writeClaim($, theme)
+      keepClaim($)
+    }
+    return r
   })
 
   on('prompt.submit', async ($, e, next) => {
